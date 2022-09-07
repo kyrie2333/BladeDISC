@@ -292,11 +292,12 @@ cc_library(
     hdrs = ["transforms/placement_utils.h"],
     includes = ["include"],
     deps = [
+        ":disc_map_hlo_to_lhlo_op",
+        ":lmhlo_disc",
+        ":mhlo_disc",
         "//tensorflow/compiler/xla/mlir_hlo:mlir_hlo",
         "//tensorflow/compiler/xla/mlir_hlo:lhlo",
         "//tensorflow/compiler/xla/mlir_hlo:map_hlo_to_lhlo_op",
-        ":mhlo_disc",
-        ":lmhlo_disc",
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:Pass",
         "@llvm-project//mlir:Support",
@@ -406,6 +407,7 @@ cc_library(
         "."
     ],
     deps = [
+        "@com_google_absl//absl/strings",
         ":pass_details",
         ":placement_utils",
         "//tensorflow/compiler/xla/mlir_hlo:mlir_hlo",
@@ -413,6 +415,7 @@ cc_library(
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:Pass",
         "@llvm-project//mlir:Transforms",
+        "//tensorflow/core:lib",
     ],
     alwayslink = 1,
 )
@@ -913,12 +916,12 @@ disc_cc_library(
         "//tensorflow/compiler/xla:debug_options_flags",
         "//tensorflow/compiler/xla:status",
         "//tensorflow/compiler/xla:statusor",
+        "//tensorflow/compiler/xla/stream_executor/gpu:asm_compiler",
         "//tensorflow/core/platform:cuda_libdevice_path",
         "//tensorflow/core:lib",
     ] + if_cuda_is_configured([
-        "//tensorflow/stream_executor/cuda:cuda_asm_compiler",
+        "//tensorflow/compiler/xla/stream_executor/cuda:cuda_asm_compiler",
     ]) + if_rocm_is_configured([
-        "//tensorflow/stream_executor/gpu:asm_compiler",
         "//tensorflow/core/platform:rocm_rocdl_path",
     ]),
 )
@@ -1772,6 +1775,25 @@ cc_library(
 )
 
 cc_library(
+    name = "disc_lower_quantize_and_dequantize",
+    srcs = ["transforms/disc_lower_quantize_and_dequantize.cc"],
+    deps = [
+        ":disc_shape_optimization_utils",
+        ":mhlo_disc",
+        ":pass_details",
+        "//tensorflow/compiler/xla/mlir_hlo:mlir_hlo",
+        "@llvm-project//llvm:Support",
+        "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:Pass",
+        "@llvm-project//mlir:ShapeDialect",
+        "@llvm-project//mlir:Support",
+        "@llvm-project//mlir:TensorDialect",
+        "@llvm-project//mlir:Transforms",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "all_passes",
     hdrs = [
         "transforms/register_passes.h",
@@ -1800,6 +1822,7 @@ cc_library(
         ":disc_hlo_to_std",
         ":disc_lhlo_legalize_roots_to_loops",
         ":disc_lower_tf",
+        ":disc_lower_quantize_and_dequantize",
         ":disc_lower_to_library_call",
         ":disc_math_approximation",
         ":disc_memref_canonicalizer",
@@ -2110,8 +2133,8 @@ tf_cc_binary(
         "//tensorflow/compiler/mlir/tensorflow",
         "//tensorflow/compiler/xla:util",
         "//tensorflow/compiler/xla/service/gpu/llvm_gpu_backend",
+        "//tensorflow/compiler/xla/stream_executor/lib",
         "//tensorflow/core:lib",
-        "//tensorflow/stream_executor/lib",
         "@com_google_absl//absl/strings",
         "@llvm-project//llvm:Analysis",
         "@llvm-project//llvm:ARMCodeGen",  # fixdeps: keep

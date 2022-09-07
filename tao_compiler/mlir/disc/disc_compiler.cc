@@ -219,12 +219,6 @@ LogicalResult LowerHLOToLLVM(ModuleOp m, const DISCLoweringOptions& options) {
   // TODO(disc): Lower HLO shape constraints instead of eliding them here.
   pm.addNestedPass<FuncOp>(disc_ral::createDiscRemoveShapeConstraintsPass());
   pm.addNestedPass<FuncOp>(createCanonicalizerPass());
-
-  // TODO: pay attention if this pass brings side-effects on performance
-  // TODO(disc): this pass introduces `tensor.cast(int32_tensor) ->
-  // index_tensor`, which is illegal ir. Temporarily disable this pass.
-  // TODO(disc): implement another implicit broadcast simplifier pass.
-  // pm.addNestedPass<FuncOp>(mhlo::createBroadcastPropagationPass());
   pm.addNestedPass<FuncOp>(createCSEPass());
   pm.addNestedPass<FuncOp>(createCanonicalizerPass());
 
@@ -302,7 +296,9 @@ LogicalResult LowerHLOToLLVM(ModuleOp m, const DISCLoweringOptions& options) {
     pm.addNestedPass<FuncOp>(disc_ral::createDiscDenseToSparsePass());
   }
 
-  pm.addNestedPass<FuncOp>(disc_ral::createDiscConvRewriter());
+  auto& gpu_options = options.gpu_info;
+  pm.addNestedPass<FuncOp>(disc_ral::createDiscConvRewriter(
+      gpu_options.cc_major, gpu_options.cc_minor));
   if (enable_shape_constraint_ir) {
     // shape-related optimization
     pm.addPass(disc_ral::createDiscShapeOptimizationPass());
@@ -451,7 +447,7 @@ LogicalResult LowerHLOToLLVM(ModuleOp m, const DISCLoweringOptions& options) {
     pm.addNestedPass<FuncOp>(disc_ral::createForLoopUnrollInterleavePass());
   }
   pm.addNestedPass<FuncOp>(arith::createArithmeticExpandOpsPass());
-  pm.addNestedPass<FuncOp>(memref::createFoldSubViewOpsPass());
+  pm.addNestedPass<FuncOp>(mlir::memref::createFoldMemRefAliasOpsPass());
 
   // Flatten multi dim memref accesses to its 1D format to enable more
   // opportunities for linearizeOp/delinearizeOp elimination.

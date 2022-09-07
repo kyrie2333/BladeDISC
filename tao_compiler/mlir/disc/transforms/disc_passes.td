@@ -50,6 +50,12 @@ def DiscLhloLegalizeRootsToParallelLoopsPass : Pass<"disc-lhlo-legalize-roots-to
 def ConvRewriterPass : Pass<"disc-conv-rewriter", "mlir::func::FuncOp"> {
   let summary = "Canonicalize conv ops to be suitable for lowering to cudnn lib calls.";
   let constructor = "createDiscConvRewriter()";
+  let options = [
+    Option<"cc_major_", "gpu-sm-cc-major", "int",
+            /*default=*/"8", "gpu sm cc_major.">,
+    Option<"cc_minor_", "gpu-sm-cc-minor", "int",
+            /*default=*/"0", "gpu sm cc_minor.">,
+  ];
 }
 
 def DotRewriterPass : Pass<"disc-dot-rewriter", "mlir::func::FuncOp"> {
@@ -453,5 +459,15 @@ def DiscConvertFakeQuantOpPass : Pass<"disc-convert-fake-quant-op", "mlir::func:
   let constructor = "createDiscConvertFakeQuantOpPass()";
   let dependentDialects = [
       "disc_shape::DISCShapeDialect",
+  ];
+}
+
+def DiscLowerQuantizeAndDequantizePass : Pass<"disc-lower-quantize-and-dequantize", "mlir::func::FuncOp"> {
+  let summary = "Lower quantize and dequantize op to a bound of basic elementwise ops.";
+  let constructor = "createDiscLowerQuantizeAndDequantizePass()";
+  let dependentDialects = [
+      "disc_shape::DISCShapeDialect",
+      "shape::ShapeDialect",
+      "mhlo::MhloDialect",
   ];
 }

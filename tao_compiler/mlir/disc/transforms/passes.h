@@ -53,7 +53,8 @@ std::unique_ptr<OperationPass<FuncOp>>
 createDiscLhloLegalizeRootsToParallelLoopsPass();
 
 // Canonicalize conv ops to be suitable for lowering to cudnn lib calls.
-std::unique_ptr<OperationPass<FuncOp>> createDiscConvRewriter();
+std::unique_ptr<OperationPass<FuncOp>> createDiscConvRewriter(int cc_major = 8,
+                                                              int cc_minor = 0);
 
 // Rewrite dot to fold transpose.
 std::unique_ptr<OperationPass<FuncOp>> createDiscDotRewriterPass();
@@ -243,6 +244,10 @@ createDiscSparseGemmTransposeSimplifierPass();
 
 // Converts fake_quant annotated graph to the real quantized version.
 std::unique_ptr<OperationPass<func::FuncOp>> createDiscConvertFakeQuantOpPass();
+
+// Lowers quantize and dequantize ops to a bunch of basic elementwise ops.
+std::unique_ptr<OperationPass<func::FuncOp>>
+createDiscLowerQuantizeAndDequantizePass();
 
 }  // namespace disc_ral
 }  // namespace mlir
