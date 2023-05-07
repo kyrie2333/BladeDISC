@@ -21,8 +21,8 @@
 #include "arm_compute/runtime/Scheduler.h"
 #endif
 
-#include "tensorflow/compiler/mlir/xla/ral/context/common_context_impl_mkldnn.h"
-#include "tensorflow/compiler/mlir/xla/ral/context/mkldnn/ideep/ideep_pin_singletons.hpp"
+#include "mlir/xla/ral/context/common_context_impl_mkldnn.h"
+#include "mlir/xla/ral/context/mkldnn/ideep/ideep_pin_singletons.hpp"
 
 namespace tao {
 namespace ral {
@@ -92,6 +92,8 @@ int initWeightPrePackingCacheCapacity() {
   return std::atoi(env);
 }
 
+}  // namespace
+
 #if defined(TAO_AARCH64)
 bool applyACLThreadPoolConfigIfNotSet() {
   static bool status = []() {
@@ -118,8 +120,6 @@ bool applyACLThreadPoolConfigIfNotSet() {
 }
 #endif
 
-}  // namespace
-
 const std::thread::id kDiscCpuDefaultThreadId{};
 
 DiscCpuMathKernelMode GetDiscCpuMathKernelMode() {
@@ -135,6 +135,18 @@ bool promoteConv1DToConv2D() {
 bool isWeightPrePackingEnabled() {
   static bool enabled = initEnableWeightPrePacking();
   return enabled;
+}
+
+bool isWeightPrePackingForMatMulEnabled() {
+  static bool enabled = []() {
+    const char* env = getenv("DISC_CPU_ENABLE_WEIGHT_PRE_PACKING_FOR_MATMUL");
+    if (!env) return true;
+    std::string envStr = env;
+    std::transform(envStr.begin(), envStr.end(), envStr.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+    return envStr == "true" || envStr == "1";
+  }();
+  return isWeightPrePackingEnabled() && enabled;
 }
 
 int getWeightPrePackingCacheCapacity() {
@@ -181,7 +193,7 @@ struct MkldnnConvState : public Context::Resource {
 bool useAclAMP() {
   static bool flag = []() {
     const char* env = getenv("DISC_CPU_ACL_USE_AMP");
-    if (!env) return true;
+    if (!env) return false;
     std::string envStr = env;
     std::transform(envStr.begin(), envStr.end(), envStr.begin(),
                    [](unsigned char c) { return std::tolower(c); });
@@ -201,6 +213,10 @@ bool isAclSupportedDepthwiseConv(
   if (!std::is_same<Tinput, float>::value ||
       !std::is_same<Tfilter, float>::value ||
       !std::is_same<Toutput, float>::value) {
+    return false;
+  }
+  // ACL currently do not support num_groups != 1
+  if (params.groups != 1) {
     return false;
   }
   // NHWC + HWIO
@@ -267,7 +283,7 @@ void runAclDepthwiseKernel(ExecutionContext* ctx, opaque_t /*stream_handle*/,
   weights.allocator()->import_memory(kernel.data);
   dst.allocator()->import_memory(output.data);
 
-  auto AclDepthwiseConvCreator = [&]() {
+  auto AclDepthwiseConvCreator = [&](const arm_compute::ITensorPack* pack) {
     std::shared_ptr<AclDepthwiseConvInfo> info(new AclDepthwiseConvInfo);
     if (!info->op.validate(
             &src_info, &weights_info, nullptr, &dst_info,
@@ -288,21 +304,26 @@ void runAclDepthwiseKernel(ExecutionContext* ctx, opaque_t /*stream_handle*/,
           /* multiplier */ Co / Ci, arm_compute::ActivationLayerInfo{},
           arm_compute::Size2D{params.dilates[1], params.dilates[0]});
     }
+    if (pack) info->op.reuse_packed_weight(*pack);
     info->op.prepare(&src, &weights, nullptr, &dst);
 
     return info;
   };
 
   std::shared_ptr<AclDepthwiseConvInfo> info;
+  std::shared_ptr<AclDepthwiseConvThreadSafeInfo> thread_safe_info;
   if (isWeightPrePackingEnabled() && params.weight_is_const) {
     std::string unique_name = "disc.ral.cpu.acl_depthwise_conv";
     auto state = ctx->getOrCreateResource<AclDepthwiseConvState>(
         unique_name, []() { return new AclDepthwiseConvState; });
     auto key = makeConvParamsKey(input, kernel, padding, output, metadata,
                                  kDiscCpuDefaultThreadId);
-    info = state->getOrCreate(key, AclDepthwiseConvCreator);
+    auto dynamicKey = makeDynamicShapeConvParamsKey(
+        input, kernel, padding, output, metadata, kDiscCpuDefaultThreadId);
+    thread_safe_info = state->getOrCreate(dynamicKey);
+    info = thread_safe_info->getOrCreate(key, AclDepthwiseConvCreator);
   } else {
-    info = AclDepthwiseConvCreator();
+    info = AclDepthwiseConvCreator(nullptr);
   }
 
   info->op.run(&src, &weights, nullptr, &dst);
@@ -327,6 +348,10 @@ bool isAclSupportedConv(ExecutionContext* ctx, opaque_t /*stream_handle*/,
   if (!std::is_same<Tinput, float>::value ||
       !std::is_same<Tfilter, float>::value ||
       !std::is_same<Toutput, float>::value) {
+    return false;
+  }
+  // ACL currently do not support num_groups != 1
+  if (params.groups != 1) {
     return false;
   }
   // NHWC + OHWI
@@ -381,28 +406,27 @@ void runAclConvKernel(ExecutionContext* ctx, opaque_t /*stream_handle*/,
     TAO_VLOG(0) << "params.dilates[0] = " << params.dilates[0];
   }
 
+  arm_compute::DataType data_type = arm_compute::DataType::F32;
+  arm_compute::DataLayout data_layout = arm_compute::DataLayout::NHWC;
+  auto src_shape = arm_compute::TensorShape(Ci, Iw, Ih, N);
+  auto weights_shape = arm_compute::TensorShape(Ci, Kw, Kh, Co);
+  auto dst_shape = arm_compute::TensorShape(Co, Ow, Oh, N);
+
+  auto src_info = arm_compute::TensorInfo(src_shape, 1, data_type, data_layout);
+  auto weights_info =
+      arm_compute::TensorInfo(weights_shape, 1, data_type, data_layout);
+  auto dst_info = arm_compute::TensorInfo(dst_shape, 1, data_type, data_layout);
+
+  arm_compute::Tensor src, weights, dst;
+  src.allocator()->init(src_info);
+  weights.allocator()->init(weights_info);
+  dst.allocator()->init(dst_info);
+  src.allocator()->import_memory(input.data);
+  weights.allocator()->import_memory(kernel.data);
+  dst.allocator()->import_memory(output.data);
+
   auto AclConvCreator = [&](const arm_compute::ITensorPack* pack) {
     std::shared_ptr<AclConvInfo> info(new AclConvInfo);
-
-    arm_compute::DataType data_type = arm_compute::DataType::F32;
-    arm_compute::DataLayout data_layout = arm_compute::DataLayout::NHWC;
-    auto src_shape = arm_compute::TensorShape(Ci, Iw, Ih, N);
-    auto weights_shape = arm_compute::TensorShape(Ci, Kw, Kh, Co);
-    auto dst_shape = arm_compute::TensorShape(Co, Ow, Oh, N);
-
-    auto src_info =
-        arm_compute::TensorInfo(src_shape, 1, data_type, data_layout);
-    auto weights_info =
-        arm_compute::TensorInfo(weights_shape, 1, data_type, data_layout);
-    auto dst_info =
-        arm_compute::TensorInfo(dst_shape, 1, data_type, data_layout);
-
-    info->src.allocator()->init(src_info);
-    info->weights.allocator()->init(weights_info);
-    info->dst.allocator()->init(dst_info);
-    info->src.allocator()->import_memory(input.data);
-    info->weights.allocator()->import_memory(kernel.data);
-    info->dst.allocator()->import_memory(output.data);
 
     bool use_fast_math =
         useAclAMP() &&
@@ -428,7 +452,7 @@ void runAclConvKernel(ExecutionContext* ctx, opaque_t /*stream_handle*/,
       ctx->signalError(Context::FAILURE, "fail to validate acl depthwise conv");
     } else {
       info->op.configure(
-          &info->src, &info->weights, nullptr, &info->dst,
+          &src, &weights, nullptr, &dst,
           arm_compute::PadStrideInfo{params.strides[1], params.strides[0],
                                      params.padding_l[1], params.padding_r[1],
                                      params.padding_l[0], params.padding_r[0],
@@ -438,26 +462,28 @@ void runAclConvKernel(ExecutionContext* ctx, opaque_t /*stream_handle*/,
           arm_compute::ActivationLayerInfo{}, use_fast_math);
     }
     if (pack) info->op.reuse_packed_weight(*pack);
-    info->op.prepare(&info->src, &info->weights, nullptr, &info->dst);
+    info->op.prepare(&src, &weights, nullptr, &dst);
 
     return info;
   };
 
   std::shared_ptr<AclConvInfo> info;
+  std::shared_ptr<AclConvThreadSafeInfo> thread_safe_info;
   if (isWeightPrePackingEnabled() && params.weight_is_const) {
     std::string unique_name = "tao_ral.cpu.acl_conv";
     auto state = ctx->getOrCreateResource<AclConvState>(
         unique_name, []() { return new AclConvState; });
     auto key = makeConvParamsKey(input, kernel, padding, output, metadata,
                                  kDiscCpuDefaultThreadId);
-    info = state->getOrCreate(key, AclConvCreator);
+    auto dynamicKey = makeDynamicShapeConvParamsKey(
+        input, kernel, padding, output, metadata, kDiscCpuDefaultThreadId);
+    thread_safe_info = state->getOrCreate(dynamicKey);
+    info = thread_safe_info->getOrCreate(key, AclConvCreator);
   } else {
     info = AclConvCreator(nullptr);
   }
 
-  info->src.allocator()->import_memory(input.data);
-  info->dst.allocator()->import_memory(output.data);
-  info->op.run(&info->src, &info->weights, nullptr, &info->dst);
+  info->op.run(&src, &weights, nullptr, &dst);
 
   timer.Stop();
   if (isProfilingEnabled()) {
@@ -559,46 +585,13 @@ TAO_RAL_API("ral_conv", "cpu", ral_conv<float, 3>);
 TAO_RAL_API("ral_conv", "cpu", ral_conv<float, 4>);
 TAO_RAL_API("ral_conv", "cpu", ral_conv<float, 5>);
 
-struct CpuGemmKey {
-  int m = -1;
-  int n = -1;
-  int k = -1;
-  int batch = 1;
-  bool transpose_a = false;
-  bool transpose_b = false;
-  opaque_t const_weight_ptr = nullptr;
-  // We need this since the matmul primitive is not thead safe.
-  // To enable large parallelism, we cache the primitive per-thread.
-  std::thread::id tid;
-
-  bool operator==(const CpuGemmKey& rhs) const {
-    return m == rhs.m && n == rhs.n && k == rhs.k && batch == rhs.batch &&
-           transpose_a == rhs.transpose_a && transpose_b == rhs.transpose_b &&
-           const_weight_ptr == rhs.const_weight_ptr && tid == rhs.tid;
-  }
-};
-
-struct CpuGemmKeyHasher {
-  std::size_t operator()(const CpuGemmKey& key) const {
-    std::size_t seed = std::hash<int>()(key.m);
-    hash_combine(seed, key.n);
-    hash_combine(seed, key.k);
-    hash_combine(seed, key.batch);
-    hash_combine(seed, key.transpose_a);
-    hash_combine(seed, key.transpose_b);
-    hash_combine(seed, key.const_weight_ptr);
-    hash_combine(seed, key.tid);
-    return seed;
-  }
-};
-
 template <typename TKey, typename TValue>
-using CpuGemmKeyMap = std::unordered_map<TKey, TValue, CpuGemmKeyHasher>;
+using CpuGemmKeyMap = std::unordered_map<TKey, TValue, typename TKey::Hasher>;
 
 #if defined(TAO_X86)
 class MklPackedWeight {
  public:
-  MklPackedWeight(ExecutionContext* ctx, const CpuGemmKey& key);
+  MklPackedWeight(ExecutionContext* ctx, const GEMMParamsKey& key);
   ~MklPackedWeight();
 
   opaque_t packed_weight() const { return packed_weight_; }
@@ -609,7 +602,8 @@ class MklPackedWeight {
   opaque_t packed_weight_ = nullptr;
 };
 
-MklPackedWeight::MklPackedWeight(ExecutionContext* ctx, const CpuGemmKey& key)
+MklPackedWeight::MklPackedWeight(ExecutionContext* ctx,
+                                 const GEMMParamsKey& key)
     : ctx_(ctx->getContext()),
       driver_(ctx->getDriver<cpu::CPUDriver>(cpu::CPUDriver::name())) {
   size_t packed_weight_size =
@@ -627,7 +621,7 @@ MklPackedWeight::~MklPackedWeight() {
 }
 
 using MklGemmCache =
-    ideep::utils::lru_cache<CpuGemmKey, std::shared_ptr<MklPackedWeight>,
+    ideep::utils::lru_cache<GEMMParamsKey, std::shared_ptr<MklPackedWeight>,
                             CpuGemmKeyMap>;
 
 struct MklGemmState : public Context::Resource {
@@ -650,7 +644,7 @@ void mkl_ral_gemm(ExecutionContext* ctx, void* stream_handle,
   int k = tp_a ? A.sizes[0] : A.sizes[1];
   int n = tp_b ? B.sizes[0] : B.sizes[1];
 
-  if (!isWeightPrePackingEnabled() || !weight_is_const) {
+  if (!isWeightPrePackingForMatMulEnabled() || !weight_is_const) {
     cblas_sgemm(CblasRowMajor, tp_a ? CblasTrans : CblasNoTrans,
                 tp_b ? CblasTrans : CblasNoTrans, m, n, k, 1.0,
                 reinterpret_cast<Tinput*>(A.data), A.strides[0],
@@ -665,7 +659,8 @@ void mkl_ral_gemm(ExecutionContext* ctx, void* stream_handle,
       unique_name, []() { return new MklGemmState; });
   opaque_t packed_weight;
   {
-    CpuGemmKey key{m, n, k, 1, tp_a, tp_b, B.data, kDiscCpuDefaultThreadId};
+    GEMMParamsKey key{
+        m, n, k, 1, tp_a, tp_b, B.data, nullptr, kDiscCpuDefaultThreadId};
     std::lock_guard<std::mutex> l(state->mu);
     auto& cache = state->cache;
     auto it = cache.find(key);
@@ -684,14 +679,9 @@ void mkl_ral_gemm(ExecutionContext* ctx, void* stream_handle,
 #endif
 }
 
-struct OnednnGemmState : public Context::Resource {
-  std::mutex mu;
-  std::unordered_map<opaque_t, std::vector<ideep::tensor>> packed_weight_cache;
-};
-
 using MatmulPrimitive = ideep::matmul_forward::super;
 using OnednnAclGemmCache =
-    ideep::utils::lru_cache<CpuGemmKey, std::shared_ptr<MatmulPrimitive>,
+    ideep::utils::lru_cache<GEMMParamsKey, std::shared_ptr<MatmulPrimitive>,
                             CpuGemmKeyMap>;
 
 struct OnednnAclGemmState : public Context::Resource {
@@ -700,7 +690,7 @@ struct OnednnAclGemmState : public Context::Resource {
 };
 
 std::shared_ptr<MatmulPrimitive> getOrCreateMatmulPrimitive(
-    OnednnAclGemmCache& cached_primitive, const CpuGemmKey& key,
+    OnednnAclGemmCache& cached_primitive, const GEMMParamsKey& key,
     const tensor& src, const tensor& weight, tensor& output) {
   auto it = cached_primitive.find(key);
   if (it == cached_primitive.end()) {
@@ -724,7 +714,7 @@ void onednn_ral_gemm(ExecutionContext* ctx, void* stream_handle,
   int n = tp_b ? B.sizes[0] : B.sizes[1];
 
 #if defined(TAO_X86)
-  if (!isWeightPrePackingEnabled() || !weight_is_const) {
+  if (!isWeightPrePackingForMatMulEnabled() || !weight_is_const) {
     dnnl::sgemm(tp_a ? 'T' : 'N', tp_b ? 'T' : 'N', m, n, k, 1.0,
                 reinterpret_cast<const float*>(A.data), A.strides[0],
                 reinterpret_cast<const float*>(B.data), B.strides[0], 0.0,
@@ -744,7 +734,7 @@ void onednn_ral_gemm(ExecutionContext* ctx, void* stream_handle,
 
 #if defined(TAO_AARCH64)
   // not using pre-packing path
-  if (!isWeightPrePackingEnabled() || !weight_is_const) {
+  if (!isWeightPrePackingForMatMulEnabled() || !weight_is_const) {
     ideep::matmul_forward::compute<true>(src, weight, output);
     return;
   }
@@ -755,7 +745,8 @@ void onednn_ral_gemm(ExecutionContext* ctx, void* stream_handle,
       unique_name, []() { return new OnednnAclGemmState; });
   std::shared_ptr<MatmulPrimitive> primitive;
   {
-    CpuGemmKey key{m, n, k, 1, tp_a, tp_b, B.data, std::this_thread::get_id()};
+    GEMMParamsKey key{
+        m, n, k, 1, tp_a, tp_b, B.data, nullptr, std::this_thread::get_id()};
     std::lock_guard<std::mutex> l(state->mu);
     primitive = getOrCreateMatmulPrimitive(state->cached_primitive, key, src,
                                            weight, output);
@@ -770,20 +761,8 @@ void onednn_ral_gemm(ExecutionContext* ctx, void* stream_handle,
                             tao::ral::TaoTypeNameHelper<Tinput>::Invoke();
   auto state = ctx->getOrCreateResource<OnednnGemmState>(
       unique_name, []() { return new OnednnGemmState; });
-  {
-    std::lock_guard<std::mutex> l(state->mu);
-    auto& packed_weights = state->packed_weight_cache[B.data];
-    for (auto& tensor : packed_weights) {
-      if (weights_desc == tensor.get_desc()) {
-        packed_weight = tensor;
-        break;
-      }
-    }
-    if (packed_weight.is_empty()) {
-      packed_weight = weight.reorder_if_differ_in(weights_desc);
-      packed_weights.push_back(packed_weight);
-    }
-  }
+  packed_weight =
+      state->get_or_create_packed_weight(B.data, weight, weights_desc);
   ideep::matmul_forward::compute</* keep_format */ true,
                                  /* weight_format_any */ true>(
       src, packed_weight, output);
@@ -917,7 +896,7 @@ void onednn_ral_batch_gemm(ExecutionContext* ctx, void* stream_handle,
   ideep::matmul_forward::compute<true>(src, weight, output);
 #elif defined(TAO_AARCH64)
   // not using pre-packing path
-  if (!isWeightPrePackingEnabled() || !weight_is_const) {
+  if (!isWeightPrePackingForMatMulEnabled() || !weight_is_const) {
     ideep::matmul_forward::compute<true>(src, weight, output);
     return;
   }
@@ -929,7 +908,8 @@ void onednn_ral_batch_gemm(ExecutionContext* ctx, void* stream_handle,
   std::shared_ptr<MatmulPrimitive> primitive;
   {
     std::lock_guard<std::mutex> l(state->mu);
-    CpuGemmKey key{m, n, k, b, tp_a, tp_b, B.data, std::this_thread::get_id()};
+    GEMMParamsKey key{
+        m, n, k, b, tp_a, tp_b, B.data, nullptr, std::this_thread::get_id()};
     primitive = getOrCreateMatmulPrimitive(state->cached_primitive, key, src,
                                            weight, output);
   }
@@ -948,7 +928,7 @@ void ral_batch_gemm(ExecutionContext* ctx, void* stream_handle,
   static_assert(N > 2, "batch gemm requires operands with rank higher than 2");
   CpuTimer timer("ral_cpu_batch_gemm");
   if (isEmptyMemref(A) || isEmptyMemref(B) || isEmptyMemref(C)) {
-    ctx->signalError(Context::FAILURE, "ral_batch_gemm input error");
+    TAO_VLOG(1) << "ral_cpu_batch_gemm: early return for empty tensor";
     return;
   }
 

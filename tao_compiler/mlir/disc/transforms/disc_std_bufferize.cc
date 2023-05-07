@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "mlir-hlo/Dialect/mhlo/IR/hlo_ops.h"
-#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mhlo/IR/hlo_ops.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Bufferization/Transforms/Bufferize.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
@@ -28,8 +28,8 @@ limitations under the License.
 #include "mlir/IR/Operation.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
-#include "tensorflow/compiler/mlir/disc/transforms/PassDetail.h"
-#include "tensorflow/compiler/mlir/disc/transforms/rewriters.h"
+#include "mlir/disc/transforms/PassDetail.h"
+#include "mlir/disc/transforms/rewriters.h"
 
 namespace mlir {
 namespace disc_ral {
@@ -53,7 +53,7 @@ LogicalResult ConstantOpConverter::matchAndRewrite(
   auto resultType = op.getType().dyn_cast<RankedTensorType>();
   if (!resultType) return failure();
 
-  if (resultType.getRank() != 1) return failure();
+  if (resultType.getRank() > 1) return failure();
 
   auto elemType = resultType.getElementType();
   if (!elemType.isIndex() && !elemType.isa<IntegerType>()) return failure();
@@ -68,7 +68,12 @@ LogicalResult ConstantOpConverter::matchAndRewrite(
         rewriter.create<arith::ConstantIndexOp>(loc, en.value().getSExtValue());
     if (!elemType.isIndex())
       val = rewriter.create<arith::IndexCastOp>(loc, elemType, val);
-    rewriter.create<memref::StoreOp>(loc, val, result, idx);
+    if (resultType.getRank() == 0) {
+      rewriter.create<memref::StoreOp>(loc, val, result);
+    } else {
+      Value idx = rewriter.create<arith::ConstantIndexOp>(loc, en.index());
+      rewriter.create<memref::StoreOp>(loc, val, result, idx);
+    }
   }
 
   rewriter.replaceOp(op, {result});
@@ -129,7 +134,7 @@ void StdBufferizePass::runOnOperation() {
 
   target.addLegalDialect<memref::MemRefDialect>();
   target.addLegalOp<func::FuncOp, ModuleOp>();
-  target.addDynamicallyLegalDialect<arith::ArithmeticDialect>(
+  target.addDynamicallyLegalDialect<arith::ArithDialect>(
       [&](Operation* op) { return typeConverter.isLegal(op); });
 
   // Setup conversion patterns.

@@ -12,18 +12,18 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
-#include "tensorflow/compiler/mlir/disc/transforms/codegen_utils.h"
+#include "mlir/disc/transforms/codegen_utils.h"
 
-#include "mlir-hlo/Dialect/lhlo/IR/lhlo_ops.h"
+#include "lhlo/IR/lhlo_ops.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
-#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/SCF/Transforms/Passes.h"
 #include "mlir/Dialect/SCF/Utils/Utils.h"
-#include "mlir/IR/BlockAndValueMapping.h"
 #include "mlir/IR/Dominance.h"
-#include "tensorflow/compiler/mlir/disc/IR/disc_shape_ops.h"
-#include "tensorflow/compiler/mlir/disc/disc_util.h"
+#include "mlir/IR/IRMapping.h"
+#include "mlir/disc/IR/disc_shape_ops.h"
+#include "mlir/disc/disc_util.h"
 
 using mlir::memref::DimOp;
 
@@ -108,22 +108,6 @@ Value emitNumElementsComputation(OpBuilder& b, Location loc, Operation* op) {
   return emitNumElementsComputation(b, loc, result_memref);
 }
 
-SmallVector<Value> getShapeValues(OpBuilder* b, Value memref) {
-  auto shape = memref.getType().dyn_cast<ShapedType>().getShape();
-  int64_t rank = shape.size();
-  auto loc = memref.getLoc();
-
-  SmallVector<Value> result;
-  for (int i = 0; i < rank; ++i) {
-    if (shape[i] == ShapedType::kDynamicSize) {
-      result.push_back(b->create<DimOp>(loc, memref, i));
-    } else {
-      result.push_back(b->create<arith::ConstantIndexOp>(loc, shape[i]));
-    }
-  }
-  return result;
-}
-
 Value calcLinearIndex(OpBuilder* b, Location loc, const ValueRange multi_index,
                       const llvm::ArrayRef<Value> shape) {
   assert(multi_index.size() == shape.size());
@@ -149,7 +133,7 @@ Value getDimSizeValue(OpBuilder* b, Value memref, int dim) {
   auto loc = memref.getLoc();
   assert(memref_ty && memref_ty.getRank() > dim);
   auto dim_size = memref_ty.getDimSize(dim);
-  if (dim_size == ShapedType::kDynamicSize) {
+  if (dim_size == ShapedType::kDynamic) {
     return b->create<DimOp>(loc, memref, dim);
   } else {
     return b->create<arith::ConstantIndexOp>(loc, dim_size);
@@ -170,50 +154,6 @@ SmallVector<Value> calcMultiDimIndex(OpBuilder* b, Location loc,
                                      Value linear_index, Value memref) {
   SmallVector<Value> shape_vec = getShapeValues(b, memref);
   return calcMultiDimIndex(b, loc, linear_index, shape_vec);
-}
-
-Value CastMemRefTo(OpBuilder& b, Location loc, Value from, Type toType,
-                   ValueRange toShape) {
-  int64_t rank = toShape.size();
-  auto memrefTy = toType.cast<MemRefType>();
-  auto getIntAttr = [&](int64_t val) {
-    return b.getIntegerAttr(b.getIndexType(), val);
-  };
-
-  SmallVector<OpFoldResult> foldSizes;
-  for (int i = 0; i < rank; ++i) {
-    if (memrefTy.getDimSize(i) == ShapedType::kDynamicSize) {
-      foldSizes.push_back(toShape[i]);
-    } else {
-      foldSizes.push_back(getIntAttr(memrefTy.getDimSize(i)));
-    }
-  }
-
-  Value dynamicStride;
-  int64_t staticStride = 1;
-  SmallVector<OpFoldResult> foldStrides;
-  for (int i = rank - 1; i >= 0; --i) {
-    if (staticStride != ShapedType::kDynamicSize) {
-      foldStrides.push_back(getIntAttr(staticStride));
-      if (memrefTy.getDimSize(i) == ShapedType::kDynamicSize) {
-        dynamicStride = b.create<arith::ConstantIndexOp>(loc, staticStride);
-        staticStride = ShapedType::kDynamicSize;
-      } else {
-        staticStride *= memrefTy.getDimSize(i);
-      }
-    } else {
-      foldStrides.push_back(dynamicStride);
-    }
-    if (dynamicStride) {
-      dynamicStride = b.create<arith::MulIOp>(loc, dynamicStride, toShape[i]);
-    }
-  }
-
-  OpFoldResult zero{getIntAttr(0)};
-  auto reversedStrides = llvm::to_vector<4>(llvm::reverse(foldStrides));
-  auto castOp = b.create<memref::ReinterpretCastOp>(loc, memrefTy, from, zero,
-                                                    foldSizes, reversedStrides);
-  return castOp;
 }
 
 using scf::IfOp;
@@ -382,8 +322,7 @@ std::pair<ParallelOp, ParallelOp> tileParallelLoop(ParallelOp op,
       thenBlock.getArgument(ivs.index())
           .replaceAllUsesExcept(newIndex, newIndex);
     }
-    thenBlock.eraseArguments(llvm::to_vector<4>(
-        llvm::seq((unsigned)0, thenBlock.getNumArguments())));
+    thenBlock.eraseArguments(0, thenBlock.getNumArguments());
   } else {
     innerLoop.getLoopBody().takeBody(op.getLoopBody());
     b.setInsertionPointToStart(innerLoop.getBody());
@@ -413,7 +352,7 @@ int getReductionTileSizeOnCPU() {
 
 // Get ops that depends on the given op in the same block. It assumes the ops in
 // the block do not have regions.
-void getDependentOps(Operation* op, DenseSet<Operation*>& dependences) {
+void getDependentOpsInBlock(Operation* op, DenseSet<Operation*>& dependences) {
   SmallVector<Value> affectedValues;
   // TODO: deal with AssumeAlignmentOp.
   for (auto result : op->getResults()) {
@@ -425,22 +364,23 @@ void getDependentOps(Operation* op, DenseSet<Operation*>& dependences) {
     }
   }
 
+  auto block = op->getBlock();
   for (auto value : affectedValues) {
     for (auto user : value.getUsers()) {
-      if (!user->isBeforeInBlock(op)) {
+      if (user == op || user->getBlock() != block ||
+          user->isBeforeInBlock(op)) {
         continue;
       }
-      DenseSet<Operation*> deps;
-      getDependentOps(user, deps);
-      dependences.insert(deps.begin(), deps.end());
+      dependences.insert(user);
+      getDependentOpsInBlock(user, dependences);
     }
   }
 }
 
 // Check whether a depends on b.
-bool dependsOn(Operation* a, Operation* b) {
+bool dependsOnInBlock(Operation* a, Operation* b) {
   DenseSet<Operation*> dependences;
-  getDependentOps(b, dependences);
+  getDependentOpsInBlock(b, dependences);
   return dependences.contains(a);
 }
 
@@ -491,7 +431,7 @@ LogicalResult generateUnrolledLoopMayInterleave(
   SmallVector<Value, 4> lastYielded(yieldedValues);
 
   for (unsigned i = 1; i < unrollFactor; i++) {
-    BlockAndValueMapping operandMap;
+    IRMapping operandMap;
 
     // Prepare operand map.
     operandMap.map(iterArgs, lastYielded);
@@ -545,13 +485,14 @@ LogicalResult generateUnrolledLoopMayInterleave(
   // Make sure `toMove` is after `toMoveAfter` when calling this lambda
   // function.
   auto canMoveAfter = [&](Block::iterator toMove, Block::iterator toMoveAfter) {
-    assert(toMove->getParentOp() == toMoveAfter->getParentOp());
-    // DominanceInfo dom(toMove->getParentOp());
+    if (toMove->getBlock() != toMoveAfter->getBlock() ||
+        !toMoveAfter->isBeforeInBlock(&(*toMove))) {
+      return false;
+    }
     bool canMove = true;
     for (auto iter = std::prev(toMove); iter != toMoveAfter;
          std::advance(iter, -1)) {
-      // if (dom.dominates(&(*iter), &(*toMove))) {
-      if (dependsOn(&(*toMove), &(*iter))) {
+      if (dependsOnInBlock(&(*toMove), &(*iter))) {
         canMove = false;
         break;
       }
@@ -633,10 +574,11 @@ LogicalResult loopUnrollByFactorAndTryInterleave(
     }
 
     // Create constant for 'stepUnrolled'.
-    stepUnrolled = stepCst == stepUnrolledCst
-                       ? step
-                       : boundsBuilder.create<arith::ConstantIndexOp>(
-                             loc, stepUnrolledCst);
+    stepUnrolled =
+        stepCst == stepUnrolledCst
+            ? step
+            : boundsBuilder.create<arith::ConstantIndexOp>(loc, stepUnrolledCst)
+                  .getResult();
   } else {
     // Dynamic loop bounds computation.
     // TODO: Add dynamic asserts for negative lb/ub/step, or

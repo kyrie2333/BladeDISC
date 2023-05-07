@@ -13,14 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "tensorflow/compiler/mlir/disc/tests/mlir_feature_test.h"
-#include "tensorflow/compiler/mlir/disc/tests/mlir_test.h"
+#include "mlir/disc/tests/mlir_feature_test.h"
+#include "mlir/disc/tests/mlir_test.h"
 #include "tensorflow/core/platform/test.h"
 
 namespace mlir_test {
 
-const std::string c_ft_path =
-    "tensorflow/compiler/mlir/disc/tests/regression/data/";
+const std::string c_ft_path = "mlir/disc/tests/regression/data/";
 
 TEST(I8AddTest, I8AddTest) {
   EXPECT_TRUE(feature_test_main(
@@ -129,6 +128,18 @@ TEST(I32AddTest, I32AddTest) {
       /*input_descriptors*/ {"2x3xi32_X", "2x1xi32_X"},
       /*output_descriptors*/ {"i32_X"},
       /*input_vals*/ {{-1, 127, 0, 63, -127, 33}, {1, -1}}));
+}
+
+TEST(IntTest, UI8ConvertTest) {
+  EXPECT_TRUE(feature_test_main(
+      /*mlir_file_path*/ c_ft_path + "int_arithmetic_convert_d_ui8.mlir",
+      /*backend_types*/
+      kSupportedBackendList,
+      /*num_inputs*/ 1,
+      /*num_outputs*/ 1,
+      /*input_descriptors*/ {"2x3xui8_X"},
+      /*output_descriptors*/ {"i1_X"},
+      /*input_vals*/ {{1, 127, 0, 63, 22, 33}}));
 }
 
 }  // namespace mlir_test

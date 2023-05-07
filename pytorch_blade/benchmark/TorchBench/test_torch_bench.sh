@@ -10,6 +10,10 @@
 # limitations under the License.
 
 # !/bin/bash
+date_str=$(date '+%Y%m%d-%H')
+if [ -f $HOME/.cache/proxy_config ]; then
+  source $HOME/.cache/proxy_config
+fi
 script_dir=$(cd $(dirname "$0"); pwd)
 benchmark_repo_dir=$HOME/.cache/torchbenchmark
 # cache benchmark repo
@@ -17,30 +21,65 @@ if [ ! -d $benchmark_repo_dir ]; then
     git clone -q https://github.com/pai-disc/torchbenchmark.git --recursive $benchmark_repo_dir
 fi
 
+# parse the arguments
+HARDWARE=$1; shift
+JOB=$1; shift
+FIELDS=("$@")
+
 # setup for torchbenchmark
-# for CI git-lfs permission problems
-cd $benchmark_repo_dir && export HOME=$(pwd) && git lfs install --force
+pushd $benchmark_repo_dir
 # cache venv in benchmark dir
 python3 -m virtualenv venv --system-site-packages && source venv/bin/activate
-python3 -m pip install -q -r $script_dir/requirements.txt
+
 # install dependencies
-git pull && git submodule update --init --recursive --depth 1 && python3 install.py --continue_on_fail
-# fix pycocotools after install
-python3 -m pip install -U numpy
+python3 -m pip install -q -r $script_dir/requirements_$HARDWARE.txt
+git pull && git checkout main  && git submodule update --init --recursive --depth 1 && python3 install.py --continue_on_fail
 pushd $script_dir # pytorch_blade/benchmark/TorchBench
 ln -s $benchmark_repo_dir torchbenchmark
 
-# benchmark 
-config_file=blade_bench.yaml
-if [ $1 ] && [ $1 == "full" ] ; then
-    config_file=blade_bench_full.yaml
-fi
+# benchmark
 # setup benchmark env
-export DISC_ENABLE_STITCH=true DISC_EXPERIMENTAL_SPECULATION_TLP_ENHANCE=true \
+export DISC_EXPERIMENTAL_SPECULATION_TLP_ENHANCE=true \
     DISC_CPU_LARGE_CONCAT_NUM_OPERANDS=4 DISC_CPU_ENABLE_EAGER_TRANSPOSE_FUSION=1 \
-    OMP_NUM_THREADS=1 TORCHBENCH_ATOL=1e-2 TORCHBENCH_RTOL=1e-2
-python3 torchbenchmark/.github/scripts/run-config.py -c $config_file -b ./torchbenchmark/ --output-dir .
+    TORCHBENCH_ATOL=1e-2 TORCHBENCH_RTOL=1e-2
+
+bench_target=$JOB
+
+config_file=blade_cuda_$JOB.yaml
+results=(eval-cuda-fp32 eval-cuda-fp16)
+python3 torchbenchmark/.github/scripts/run-config.py \
+        -c $config_file -b ./torchbenchmark/ --output-dir .
+
 # results
-cat eval-cuda-fp16/summary.csv
-cat eval-cuda-fp32/summary.csv
-popd
+oss_link=https://bladedisc-ci.oss-cn-hongkong.aliyuncs.com
+oss_dir=oss://bladedisc-ci/TorchBench/gpu/${bench_target}/${date_str}
+OSSUTIL=ossutil
+GH=gh
+
+for result in ${results[@]}
+do
+    cat ${result}/summary.csv
+    curl ${oss_link}/TorchBench/baseline/${result}_${bench_target}.csv -o $result.csv
+    tar -zcf ${script_dir}/${result}.tar.gz ${result}
+    rm -rf ${result}/profiling
+    /disc/scripts/ci/$OSSUTIL cp ${script_dir}/${result}.tar.gz ${oss_dir}/
+    /disc/scripts/ci/$OSSUTIL cp -r ${script_dir}/${result} ${oss_dir}/${result}
+done
+
+# Default compare fields
+if [ ${#FIELDS[@]} -eq 0 ]; then
+    FIELDS=("disc (latency)" "blade (latency)" "dynamo-blade (latency)" "dynamo-disc (latency)")
+fi
+
+# performance anaysis
+python3 results_analysis.py -t ${results} -i ${oss_dir} -p ${RELATED_DIFF_PERCENT} -f "${FIELDS[@]}"
+
+if [ -f "ISSUE.md" ]; then
+    wget ${oss_link}/download/github/$GH -O gh && chmod +x ./gh && \
+    ./gh issue create -F ISSUE.md \
+    -t "[TorchBench] Performance Signal Detected" \
+    -l Benchmark
+fi
+
+popd # $benchmark_repo_dir
+popd # BladeDISC/

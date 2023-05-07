@@ -23,7 +23,23 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --venv)
-      DISC_VENV="$2"
+      VENV_PATH="$2"
+      shift 2
+      ;;
+    --target_cpu_arch)
+      TARGET_CPU_ARCH="--target_cpu_arch $2"
+      shift 2
+      ;;
+    --rocm)
+      ROCM="--rocm"
+      shift
+      ;;
+    --dcu)
+      DCU="--dcu"
+      shift
+      ;;
+    --rocm_path)
+      ROCM_PATH="--rocm_path $2"
       shift 2
       ;;
     -h)

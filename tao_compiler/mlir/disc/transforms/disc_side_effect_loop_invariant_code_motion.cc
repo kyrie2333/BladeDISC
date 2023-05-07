@@ -12,7 +12,7 @@
 // This pass makes `loop invariant code motion` optimization on operators with
 // side effect.
 
-#include "mlir-hlo/Dialect/lhlo/IR/lhlo_ops.h"
+#include "lhlo/IR/lhlo_ops.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"                     // from @llvm-project
 #include "mlir/IR/Location.h"                            // from @llvm-project
 #include "mlir/IR/MLIRContext.h"                         // from @llvm-project
@@ -22,8 +22,8 @@
 #include "mlir/Pass/Pass.h"                              // from @llvm-project
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"  // from @llvm-project
 #include "mlir/Transforms/Passes.h"                      // from @llvm-project
-#include "tensorflow/compiler/mlir/disc/disc_util.h"
-#include "transforms/PassDetail.h"
+#include "mlir/disc/disc_util.h"
+#include "mlir/disc/transforms/PassDetail.h"
 
 namespace mlir {
 namespace disc_ral {

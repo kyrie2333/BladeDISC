@@ -19,6 +19,7 @@ import torch
 import torch.nn as nn
 
 import torch_blade.pass_manager as pm
+from torch_blade import jit_pass_propagate_input_shapes, jit_pass_constant_propagation
 from torch_blade.config import Config
 from torch_blade.logging import logger
 from torch_blade.tools import set_tensor_shape
@@ -31,37 +32,48 @@ def _record_shape_information(s_module, inputs):
         return
     if isinstance(inputs, torch.Tensor):
         inputs = (inputs, )
-    # TODO: 
+    # TODO:
     # handle the exception raised by record_shape_by_tracing,
     # such as inputs device mismatch
     record_shape_by_tracing(s_module._c, inputs)
-
-
-def _set_annotate_args(s_module, annotations):
-    graph = s_module._c.forward.graph
-    for idx, input in enumerate(graph.inputs()):
-        # skip the 1th self input value
-        if idx == 0:
-            continue
-        input_dims, _ = annotations[idx-1]
-        set_tensor_shape(input, input_dims)
 
 def _script_module_preprocess(s_module, inputs, input_dims=[]):
     graph = s_module._c.forward.graph
     torch._C._jit_pass_inline(graph)
     pm._jit_pass_hack_cpu_device(graph)
+    pm._jit_pass_hack_gpu_device(graph)
 
     cfg = Config.get_current_context_or_new()
     for jit_pass in cfg.customize_jit_passes:
         jit_pass(graph)
 
-    # It will record tensor information, such as ranks, data types,
-    # and devices, that are useful for analysis and optimizations
-    # by tracing with auxiliary inputs.
-    _record_shape_information(s_module, inputs)
-    if cfg.annotate_args:
-        _set_annotate_args(s_module, cfg.annotate_args)
+    cfg = Config.get_current_context_or_new()
+    if not cfg.disable_optimization_for_inference:
+        # TODO(tanyo):
+        # It will record tensor information, such as ranks, data types,
+        # and devices, that are useful for analysis and optimizations
+        # by tracing with auxiliary inputs.
+        # Should be deprecated once shape analysis is complete and robust
+        _record_shape_information(s_module, inputs)
+        return
 
+    for idx, input in enumerate(graph.inputs()):
+        # skip the 1th self input value
+        is_tensor = input.type().isSubtypeOf(torch._C.TensorType.get())
+        if not is_tensor: continue
+        inp = inputs[idx-1]
+        dim = len(inp.size())
+        if isinstance(dim, int):
+            set_tensor_shape(input, list(inp.size()))
+        inp_typ = input.type()
+        inp_typ = inp_typ.with_dtype(inp.dtype)
+        input.setType(inp_typ.with_device(inp.device))
+    if cfg.disable_optimization_for_inference:
+        # TODO(note): using a simple constant propagation pass on training
+        jit_pass_constant_propagation(graph)
+    else:
+        torch._C._jit_pass_constant_propagation(graph)
+    jit_pass_propagate_input_shapes(graph)
 
 def _deep_copy_script_module(model):
 
@@ -234,7 +246,12 @@ def export(model, allow_tracing=None, model_inputs=None):
     if isinstance(model, nn.DataParallel) or isinstance(model, nn.parallel.DistributedDataParallel):
         model = model.module
 
-    _model = _deepcopy(model)
+    with Config.get_current_context_or_new() as cfg:
+        # If disable_optimization_for_inference is True, we will not need deep copy of the model.
+        if not cfg.disable_optimization_for_inference:
+            _model = _deepcopy(model)
+        else:
+            _model = model
 
     if allow_tracing:
         assert model_inputs is not None, 'model_inputs can not be None when use torch.jit.trace'

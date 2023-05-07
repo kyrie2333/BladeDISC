@@ -24,7 +24,7 @@ limitations under the License.
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Transforms/Passes.h"
-#include "tensorflow/compiler/mlir/disc/transforms/PassDetail.h"
+#include "mlir/disc/transforms/PassDetail.h"
 
 namespace mlir {
 namespace disc_ral {
@@ -44,7 +44,8 @@ struct ReinterpretCastOpConverter : public OpRewritePattern<ReinterpretCastOp> {
 LogicalResult ReinterpretCastOpConverter::matchAndRewrite(
     ReinterpretCastOp op, PatternRewriter& rewriter) const {
   Location loc = op.getLoc();
-  auto alloc = dyn_cast_or_null<memref::AllocOp>(op.source().getDefiningOp());
+  auto alloc =
+      dyn_cast_or_null<memref::AllocOp>(op.getSource().getDefiningOp());
   if (!alloc) return failure();
 
   auto allocTy = alloc.getResult().getType().cast<MemRefType>();

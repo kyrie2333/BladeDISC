@@ -19,6 +19,7 @@
 #define RAL_RAL_LOGGING_H_
 
 #include <atomic>
+#include <cassert>
 #include <limits>
 #include <memory>
 #include <sstream>
@@ -119,6 +120,9 @@ class LogMessageNull : public std::basic_ostringstream<char> {
   : ::tao::ral::internal::Voidifier() &                        \
           ::tao::ral::internal::LogMessage(__FILE__, __LINE__, \
                                            ::tao::ral::INFO)
+
+#define TAO_CHECK(expr) \
+  while (!(expr)) TAO_LOG(FATAL) << "TAO_CHECK failed: "
 
 }  // namespace ral
 }  // namespace tao

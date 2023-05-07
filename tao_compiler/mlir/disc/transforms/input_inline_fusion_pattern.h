@@ -12,12 +12,12 @@
 #ifndef DISC_TRANSFORMS_INPUT_INLINE_FUSION_PATTERN_H_
 #define DISC_TRANSFORMS_INPUT_INLINE_FUSION_PATTERN_H_
 
-#include "mlir-hlo/Dialect/lhlo/IR/lhlo_ops.h"
+#include "lhlo/IR/lhlo_ops.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/SCF/Utils/Utils.h"
 #include "mlir/IR/Dominance.h"
-#include "tensorflow/compiler/mlir/disc/transforms/fusion_utils.h"
-#include "tensorflow/compiler/mlir/disc/transforms/lhlo_elemental_utils.h"
+#include "mlir/disc/transforms/fusion_utils.h"
+#include "mlir/disc/transforms/lhlo_elemental_utils.h"
 
 namespace mlir {
 namespace disc_ral {
@@ -66,7 +66,8 @@ namespace disc_ral {
 class InputInlineFusionPattern : public RewritePattern {
  public:
   explicit InputInlineFusionPattern(MLIRContext* context,
-                                    LowerConfig* lower_config = nullptr)
+                                    LowerConfig* lower_config = nullptr,
+                                    bool one_pass = false)
       : RewritePattern(lmhlo::FusionOp::getOperationName(), 1, context),
         lower_config_(lower_config) {}
 
@@ -77,10 +78,10 @@ class InputInlineFusionPattern : public RewritePattern {
 
   LogicalResult matchAndRewrite(Operation* op,
                                 PatternRewriter& rewriter) const override {
-    if (isStitchFusion(op) && !isOnGpu(op)) return failure();
+    if (isFusionType<FusionType::kStitch>(op) && !isOnGpu(op)) return failure();
     // When we pass lower_config, we only process kStitch fusion on GPU.
     if (lower_config_ != nullptr) {
-      if (!isOnGpu(op) || !isStitchFusion(op)) {
+      if (!isOnGpu(op) || !isFusionType<FusionType::kStitch>(op)) {
         return failure();
       }
     }
@@ -95,8 +96,9 @@ class InputInlineFusionPattern : public RewritePattern {
     // Returns success if any of parallelOp is processed.
     for (scf::ParallelOp parallelOp : innermostPloops) {
       if (!failed(processParallelOp(parallelOp, &parent_block, rewriter,
-                                    dominance_info)))
+                                    dominance_info))) {
         return success();
+      }
     }
     return failure();
   }

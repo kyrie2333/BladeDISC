@@ -17,8 +17,8 @@
 #include <unordered_set>
 #include <vector>
 
-#include "mlir-hlo/Dialect/mhlo/IR/hlo_ops.h"
-#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"       // from @llvm-project
+#include "mhlo/IR/hlo_ops.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"                 // from @llvm-project
 #include "mlir/Dialect/Func/IR/FuncOps.h"                // from @llvm-project
 #include "mlir/Dialect/Tensor/IR/Tensor.h"               // from @llvm-project
 #include "mlir/IR/Attributes.h"                          // from @llvm-project
@@ -29,8 +29,8 @@
 #include "mlir/Pass/Pass.h"                              // from @llvm-project
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"  // from @llvm-project
 #include "mlir/Transforms/Passes.h"                      // from @llvm-project
-#include "tensorflow/compiler/mlir/disc/disc_util.h"
-#include "transforms/PassDetail.h"
+#include "mlir/disc/disc_util.h"
+#include "mlir/disc/transforms/PassDetail.h"
 
 using llvm::StringRef;
 using std::string;
@@ -54,7 +54,7 @@ static inline bool isNonBatchingTransposeTensorValue(
   permutation.clear();
   if (auto transpose = dyn_cast<mhlo::TransposeOp>(val.getDefiningOp())) {
     for (auto& en :
-         llvm::enumerate(transpose.permutation().getValues<int64_t>())) {
+         llvm::enumerate(transpose.getPermutation().getValues<int64_t>())) {
       if (en.index() != en.value()) {
         if (batching_dims.find(en.index()) != batching_dims.end()) {
           return false;
@@ -81,8 +81,8 @@ struct DotToDotGeneralConvert : public OpRewritePattern<mhlo::DotOp> {
   LogicalResult matchAndRewrite(mhlo::DotOp op,
                                 PatternRewriter& rewriter) const override {
     Location loc = op.getLoc();
-    Value old_lhs = op.lhs();
-    Value old_rhs = op.rhs();
+    Value old_lhs = op.getLhs();
+    Value old_rhs = op.getRhs();
     auto old_lhs_ty = old_lhs.getType().dyn_cast<RankedTensorType>();
     if (!old_lhs_ty) return failure();
 
@@ -104,7 +104,7 @@ struct DotToDotGeneralConvert : public OpRewritePattern<mhlo::DotOp> {
         rhs_contracting_dims);
 
     Value dot_general = rewriter.create<mhlo::DotGeneralOp>(
-        op.getLoc(), op.getType(), op.lhs(), op.rhs(), dot_dimension_attr,
+        op.getLoc(), op.getType(), op.getLhs(), op.getRhs(), dot_dimension_attr,
         nullptr);
     rewriter.replaceOp(op, dot_general);
     return success();
@@ -118,21 +118,6 @@ struct DotToDotGeneralConvert : public OpRewritePattern<mhlo::DotOp> {
 struct DotGeneralConvert : public OpRewritePattern<mhlo::DotGeneralOp> {
   explicit DotGeneralConvert(MLIRContext* context)
       : OpRewritePattern(context) {}
-
-  SmallVector<Value, 4> getDimSizesOfTensor(PatternRewriter& rewriter,
-                                            Operation* op, Value value) const {
-    auto value_ty = value.getType().dyn_cast<RankedTensorType>();
-
-    auto loc = op->getLoc();
-    auto rank = value_ty.getRank();
-    // Get int vector [0, 1, ..., rank-1]
-    SmallVector<Value, 4> dim_sizes;
-    for (size_t d = 0; d < rank; ++d) {
-      dim_sizes.emplace_back(rewriter.create<tensor::DimOp>(loc, value, d));
-    }
-    return dim_sizes;
-  }
-
   Value unsqueezeTensorDim(PatternRewriter& rewriter, Operation* op,
                            Value tensor, int64_t dim) const {
     // Returns a new tensor with dims of size 1 inserted at the specified
@@ -210,8 +195,8 @@ struct DotGeneralConvert : public OpRewritePattern<mhlo::DotGeneralOp> {
   LogicalResult matchAndRewrite(mhlo::DotGeneralOp op,
                                 PatternRewriter& rewriter) const override {
     Location loc = op.getLoc();
-    Value old_lhs = op.lhs();
-    Value old_rhs = op.rhs();
+    Value old_lhs = op.getLhs();
+    Value old_rhs = op.getRhs();
 
     RankedTensorType old_l_type =
         old_lhs.getType().dyn_cast<RankedTensorType>();
@@ -221,7 +206,7 @@ struct DotGeneralConvert : public OpRewritePattern<mhlo::DotGeneralOp> {
       return failure();
     }
 
-    auto dim_numbers = op.dot_dimension_numbers();
+    auto dim_numbers = op.getDotDimensionNumbers();
     auto batching_dims = dim_numbers.getLhsBatchingDimensions();
     auto n_batch_dims = batching_dims.size();
     for (auto d : batching_dims)
@@ -315,7 +300,9 @@ struct DotGeneralConvert : public OpRewritePattern<mhlo::DotGeneralOp> {
     } else {
       return failure();
     }
-    rewriter.replaceOp(op, dot_general);
+
+    // should return the original output type
+    rewriter.replaceOpWithNewOp<tensor::CastOp>(op, op.getType(), dot_general);
     return success();
   }
 };
@@ -333,8 +320,8 @@ struct TransposeFoldingConvert : public OpRewritePattern<mhlo::DotGeneralOp> {
     }
 
     Location loc = op.getLoc();
-    Value old_lhs = op.lhs();
-    Value old_rhs = op.rhs();
+    Value old_lhs = op.getLhs();
+    Value old_rhs = op.getRhs();
 
     RankedTensorType old_l_type =
         old_lhs.getType().dyn_cast<RankedTensorType>();
@@ -344,7 +331,7 @@ struct TransposeFoldingConvert : public OpRewritePattern<mhlo::DotGeneralOp> {
       return failure();
     }
 
-    auto dim_numbers = op.dot_dimension_numbers();
+    auto dim_numbers = op.getDotDimensionNumbers();
     auto lhs_batching_dims = dim_numbers.getLhsBatchingDimensions();
     SmallVector<int64_t, 4> lhs_perm;
     bool tp_lhs = isNonBatchingTransposeTensorValue(
@@ -420,9 +407,9 @@ struct EinsumToDotGeneralPattern : public OpRewritePattern<mhlo::EinsumOp> {
   LogicalResult matchAndRewrite(mhlo::EinsumOp op,
                                 PatternRewriter& rewriter) const override {
     Location loc = op.getLoc();
-    Value old_lhs = op.lhs();
-    Value old_rhs = op.rhs();
-    StringRef equation = op.einsum_config();
+    Value old_lhs = op.getLhs();
+    Value old_rhs = op.getRhs();
+    StringRef equation = op.getEinsumConfig();
 
     TokensTy tokens;
     llvm::SmallDenseSet<char> contracting_tokens;
@@ -727,14 +714,14 @@ Value EinsumToDotGeneralPattern::processOperand(
       int64_t size_static = 1;
       Value size_value = rewriter.create<arith::ConstantIndexOp>(loc, 1);
       for (auto dim : dims) {
-        if (size_static == ShapedType::kDynamicSize ||
-            transposed_shape[dim] == ShapedType::kDynamicSize) {
-          size_static = ShapedType::kDynamicSize;
+        if (size_static == ShapedType::kDynamic ||
+            transposed_shape[dim] == ShapedType::kDynamic) {
+          size_static = ShapedType::kDynamic;
         } else {
           size_static *= transposed_shape[dim];
         }
         Value orig_dim_val =
-            transposed_shape[dim] == ShapedType::kDynamicSize
+            transposed_shape[dim] == ShapedType::kDynamic
                 ? rewriter.create<tensor::DimOp>(loc, result, dim).getResult()
                 : rewriter
                       .create<arith::ConstantIndexOp>(loc,
@@ -792,7 +779,7 @@ Value EinsumToDotGeneralPattern::processResult(
         int64_t lhs_idx = find_index(lhs_original_tokens, t);
         reshaped_dims.push_back(orig_lhs_shape[lhs_idx]);
         Value orig_dim_val =
-            orig_lhs_shape[lhs_idx] == ShapedType::kDynamicSize
+            orig_lhs_shape[lhs_idx] == ShapedType::kDynamic
                 ? rewriter.create<tensor::DimOp>(loc, orig_lhs, lhs_idx)
                       .getResult()
                 : rewriter
@@ -804,7 +791,7 @@ Value EinsumToDotGeneralPattern::processResult(
         int64_t rhs_idx = find_index(rhs_original_tokens, t);
         reshaped_dims.push_back(orig_rhs_shape[rhs_idx]);
         Value orig_dim_val =
-            orig_rhs_shape[rhs_idx] == ShapedType::kDynamicSize
+            orig_rhs_shape[rhs_idx] == ShapedType::kDynamic
                 ? rewriter.create<tensor::DimOp>(loc, orig_rhs, rhs_idx)
                       .getResult()
                 : rewriter

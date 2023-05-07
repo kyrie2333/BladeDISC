@@ -9,7 +9,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "tensorflow/compiler/decoupling/mlir_compiler.h"
+#include "decoupling/mlir_compiler.h"
 
 #include <vector>
 
@@ -23,8 +23,8 @@
 #include "mlir/IR/Attributes.h"  // from @llvm-project
 #include "mlir/InitAllDialects.h"
 #include "mlir/InitAllPasses.h"
-#include "tensorflow/compiler/mlir/disc/disc_compiler.h"
-#include "tensorflow/compiler/mlir/disc/disc_util.h"
+#include "mlir/disc/disc_compiler.h"
+#include "mlir/disc/disc_util.h"
 #include "tensorflow/compiler/mlir/tensorflow/transforms/bridge.h"
 #include "tensorflow/compiler/mlir/tensorflow/transforms/passes.h"
 #include "tensorflow/compiler/mlir/tensorflow/translate/import_model.h"
@@ -276,7 +276,7 @@ Status AppendIOAttr(mlir::ModuleOp module, const GraphImportConfig& specs,
 
   main_func->setAttr("tf.entry_function",
                      builder.getDictionaryAttr(attributes));
-  return Status::OK();
+  return tsl::OkStatus();
 }
 
 CompilerMLIR::CompilerMLIR() {
@@ -303,7 +303,7 @@ CompilerMLIR::~CompilerMLIR() {}
 
 Status CompilerMLIR::Init(const TaoCompilerInput& input,
                           const string& output_file) {
-  return Status::OK();
+  return tsl::OkStatus();
 }
 
 Status CompilerMLIR::ConvertToMlir(const TaoCompilerInput& input,
@@ -347,7 +347,9 @@ Status CompilerMLIR::ConvertToMlir(const TaoCompilerInput& input,
   std::string graph_def_str = graph_def.SerializeAsString();
   VLOG(2) << "GraphDef str:\n" << graph_def.DebugString();
 
-  context_.reset(new mlir::MLIRContext);
+  mlir::DialectRegistry registry;
+  mlir::registerAllDialects(registry);
+  context_.reset(new mlir::MLIRContext(registry));
   auto& context = *context_;
   GraphDebugInfo debug_info;
   GraphImportConfig specs;
@@ -389,12 +391,12 @@ Status CompilerMLIR::ConvertToMlir(const TaoCompilerInput& input,
   }
 
   module_ = std::move(module);
-  return Status::OK();
+  return tsl::OkStatus();
 }
 
 Status CompilerMLIR::FillDeviceInfo(
     mlir::disc_ral::DISCLoweringOptions& options) {
-  return Status::OK();
+  return tsl::OkStatus();
 }
 
 Status CompilerMLIR::CompileMlirToExecutable(const TaoCompilerInput& input,
@@ -414,7 +416,7 @@ Status CompilerMLIR::CompileMlirToExecutable(const TaoCompilerInput& input,
   TF_RETURN_IF_ERROR(
       WriteTextProto(Env::Default(), output_file, result_proto_));
 
-  return Status::OK();
+  return tsl::OkStatus();
 }
 
 Status CompilerMLIR::Compile(const TaoCompilerInput& input,
@@ -422,7 +424,7 @@ Status CompilerMLIR::Compile(const TaoCompilerInput& input,
   TF_RETURN_IF_ERROR(Init(input, output_file));
   TF_RETURN_IF_ERROR(ConvertToMlir(input, output_file));
   TF_RETURN_IF_ERROR(CompileMlirToExecutable(input, output_file));
-  return Status::OK();
+  return tsl::OkStatus();
 }
 
 }  // namespace tao

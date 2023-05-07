@@ -9,7 +9,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import contextlib
 
 import torch
 
@@ -18,19 +17,21 @@ try:
     from torch_blade.config import OptPipelines
     from torch_blade.tensorrt.flags import builder_flags_context
     from torch_blade.tensorrt.tensorrt_optimization import (
+        _TRT_GROUP_NAME,
         get_unsupported_nodes,
         optimize_trt,
-        trt_engine_conversion,
-        _TRT_GROUP_NAME
+        trt_engine_conversion
     )
 
     OptPipelines.register_pipeline(backend_name(), optimize_trt)
-
+    _TRT_NAME = backend_name()
     _is_available = True
-except ImportError as e:
+except ImportError:
     _is_available = False
+    _TRT_NAME = "TensorRT"
 
 from torch_blade import utils
+
 
 def is_available():
     return _is_available

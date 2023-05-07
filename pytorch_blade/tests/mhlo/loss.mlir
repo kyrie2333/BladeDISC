@@ -2,14 +2,14 @@
 
 // CHECK-LABEL:  func.func @torch.aten.nll_loss_forward(
 // CHECK-SAME:         %[[ARG0:.*]]: tensor<?x?xf32>, %[[ARG1:.*]]: tensor<?xi32>) -> (tensor<f32>, tensor<f32>) {
-// CHECK:         %[[C0:.*]] = arith.constant 0 : index
 // CHECK:         %[[T0:.*]] = mhlo.constant dense<0.000000e+00> : tensor<f32>
 // CHECK:         %[[C1_I32:.*]] = arith.constant 1 : i32
+// CHECK:         %[[C0:.*]] = arith.constant 0 : index
 // CHECK:         %[[T1:.*]] = tensor.dim %[[ARG0]], %[[C0]] : tensor<?x?xf32>
 // CHECK:         %[[T2:.*]] = arith.index_cast %[[T1]] : index to i64
 // CHECK:         %[[T3:.*]] = arith.sitofp %[[T2]] : i64 to f64
 // CHECK:         %[[T4:.*]] = tensor.from_elements %[[T3]] : tensor<1xf64>
-// CHECK:         %[[T5:.*]] = mhlo.convert(%[[T4]]) : (tensor<1xf64>) -> tensor<1xf32>
+// CHECK:         %[[T5:.*]] = mhlo.convert %[[T4]] : (tensor<1xf64>) -> tensor<1xf32>
 // CHECK:         %[[T6:.*]] = mhlo.reshape %[[T5]] : (tensor<1xf32>) -> tensor<f32>
 // CHECK:         %[[T7:.*]] = arith.index_cast %[[T1]] : index to i32
 // CHECK:         %[[T8:.*]] = tensor.from_elements %[[T7]], %[[C1_I32]] : tensor<2xi32>

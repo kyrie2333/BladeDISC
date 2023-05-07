@@ -10,38 +10,48 @@ on:
   workflow_dispatch:
 
 jobs:
-  TorchBenchPartial:
+  TorchBenchCudaTiny:
     if: github.event.schedule != '30 15 * * 5' # daily or dispatch
     uses: ./.github/workflows/reusable.yml
     with:
       name: torch-offcial-benchmark
-      base_image: bladedisc/bladedisc:latest-runtime-torch1.12.0-cu113
-      device: gpu-a10
+      base_image: bladedisc/bladedisc:latest-runtime-torch-pre-cu117
+      device: gpu-bench
       dockerfile: docker/cronjobs/Dockerfile.torch.bench
       extra_run_args: --cap-add=SYS_ADMIN --gpus all
-      exec_command: bash ./pytorch_blade/benchmark/TorchBench/test_torch_bench.sh
+      extra_envs: -e RELATED_DIFF_PERCENT=5
+      exec_command: bash ./pytorch_blade/benchmark/TorchBench/test_torch_bench.sh cuda tiny
       push_command: ""
       remote_dev_docker: ""
-    secrets:
-      ALIYUN_DOCKER_USERNAME: ${{ secrets.ALIYUN_DOCKER_USERNAME }}
-      ALIYUN_DOCKER_PASSWORD: ${{ secrets.ALIYUN_DOCKER_PASSWORD }}
-      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+    secrets: inherit
 
-  TorchBenchFull:
+  TorchBenchCudaPartial:
+    if: github.event.schedule == '30 15 * * *'
+    uses: ./.github/workflows/reusable.yml
+    with:
+      name: torch-offcial-benchmark
+      base_image: bladedisc/bladedisc:latest-runtime-torch-pre-cu117
+      device: gpu-bench
+      dockerfile: docker/cronjobs/Dockerfile.torch.bench
+      extra_run_args: --cap-add=SYS_ADMIN --gpus all
+      extra_envs: -e RELATED_DIFF_PERCENT=5
+      exec_command: bash ./pytorch_blade/benchmark/TorchBench/test_torch_bench.sh cuda partial
+      push_command: ""
+      remote_dev_docker: ""
+    secrets: inherit
+
+  TorchBenchCudaFull:
     if: github.event.schedule == '30 15 * * 5'
     uses: ./.github/workflows/reusable.yml
     with:
       name: torch-offcial-benchmark
-      base_image: bladedisc/bladedisc:latest-runtime-torch1.12.0-cu113
-      device: gpu-a10
+      base_image: bladedisc/bladedisc:latest-runtime-torch-pre-cu117
+      device: gpu-bench
+      timeout_minutes: 4320 # 72h
       dockerfile: docker/cronjobs/Dockerfile.torch.bench
       extra_run_args: --cap-add=SYS_ADMIN --gpus all
-      exec_command: bash ./pytorch_blade/benchmark/TorchBench/test_torch_bench.sh full
+      extra_envs: -e RELATED_DIFF_PERCENT=5
+      exec_command: bash ./pytorch_blade/benchmark/TorchBench/test_torch_bench.sh cuda full
       push_command: ""
       remote_dev_docker: ""
-    secrets:
-      ALIYUN_DOCKER_USERNAME: ${{ secrets.ALIYUN_DOCKER_USERNAME }}
-      ALIYUN_DOCKER_PASSWORD: ${{ secrets.ALIYUN_DOCKER_PASSWORD }}
-      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+    secrets: inherit

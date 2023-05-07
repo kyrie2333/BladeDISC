@@ -11,7 +11,7 @@
 
 #if defined(TAO_CPU_ONLY) && defined(TAO_AARCH64)
 
-#include "tensorflow/compiler/mlir/xla/ral/context/common_context_impl_acl.h"
+#include "mlir/xla/ral/context/common_context_impl_acl.h"
 
 #include <unordered_map>
 
@@ -22,9 +22,11 @@
 #include "arm_compute/core/utils/quantization/AsymmHelpers.h"
 #include "arm_compute/runtime/NEON/NEScheduler.h"
 #include "arm_compute/runtime/NEON/functions/NEFFTConvolutionLayer.h"
+#include "mlir/xla/ral/ral_md5.h"
 #include "src/common/utils/Log.h"
 #include "src/cpu/operators/CpuConv2d.h"
 #include "src/cpu/operators/CpuDepthwiseConv2d.h"
+#include "src/cpu/operators/CpuGemmLowpMatrixMultiplyCore.h"
 
 namespace arm_compute {
 using namespace arm_compute::experimental;
@@ -118,6 +120,22 @@ std::unique_ptr<IMemoryRegion> DISCAllocator::make_region(size_t size,
 }
 
 using DISCBuffers = std::vector<std::unique_ptr<IMemoryRegion>>;
+
+std::string calculate_md5(WorkspaceData<Tensor>& workspace) {
+  tao::ral::MD5 md5;
+  int num_packed_weights = 0;
+  for (auto& item : workspace) {
+    if (item.lifetime != experimental::MemoryLifetime::Persistent) continue;
+    md5.update((const char*)(&item.slot), sizeof(item.slot));
+    auto& tensor = *item.tensor;
+    auto buffer =
+        tensor.buffer() + tensor.info()->offset_first_element_in_bytes();
+    md5.update(buffer, tensor.info()->total_size());
+    ++num_packed_weights;
+  }
+  md5.update((const char*)(&num_packed_weights), sizeof(num_packed_weights));
+  return md5.finalize().hexdigest();
+}
 
 template <typename TensorType>
 WorkspaceData<TensorType> manage_runtime_workspace(
@@ -344,15 +362,21 @@ void DISCNEConvolutionLayer::reuse_packed_weight(const ITensorPack& pack) {
   _impl->persistent_pack = pack;
 }
 
+std::string DISCNEConvolutionLayer::get_md5_for_packed_weight() {
+  return calculate_md5(_impl->workspace);
+}
+
 DISCNEDepthwiseConvolutionLayer::~DISCNEDepthwiseConvolutionLayer() = default;
 
 struct DISCNEDepthwiseConvolutionLayer::
     NEDepthwiseConvolutionLayerOptimizedInternal::Impl {
-  Tensor packed_weights{};  // INT_4
   std::shared_ptr<cpu::CpuDepthwiseConv2d> op{nullptr};
   std::shared_ptr<cpu::CpuDepthwiseConv2dAssemblyDispatch> dwc_optimized_func{
       nullptr};
   bool is_prepared{false};
+  experimental::MemoryRequirements aux_mem_req{};
+  WorkspaceData<Tensor> workspace{};
+  ITensorPack persistent_pack{};
 };
 
 DISCNEDepthwiseConvolutionLayer::NEDepthwiseConvolutionLayerOptimizedInternal::
@@ -394,13 +418,7 @@ void DISCNEDepthwiseConvolutionLayer::
       biases == nullptr ? nullptr : biases->info(), output->info(), info);
 
   // Allocate memory based on the internal memory requirements
-  experimental::MemoryRequirements mem_req =
-      _impl->dwc_optimized_func->workspace();
-  _impl->packed_weights.allocator()->init(
-      TensorInfo(TensorShape{mem_req[1].size + mem_req[1].alignment}, 1,
-                 DataType::S8),
-      mem_req[1].alignment);
-  _impl->packed_weights.allocator()->allocate();
+  _impl->aux_mem_req = _impl->dwc_optimized_func->workspace();
 }
 
 Status DISCNEDepthwiseConvolutionLayer::
@@ -452,7 +470,8 @@ void DISCNEDepthwiseConvolutionLayer::
   pack.add_tensor(TensorType::ACL_SRC_1, weights);
   pack.add_tensor(TensorType::ACL_SRC_2, biases);
   pack.add_tensor(TensorType::ACL_INT_3, &workspace);
-  pack.add_tensor(TensorType::ACL_INT_4, &_impl->packed_weights);
+  pack.add_tensor(TensorType::ACL_INT_4,
+                  _impl->persistent_pack.get_tensor(TensorType::ACL_INT_4));
   pack.add_tensor(TensorType::ACL_DST_0, output);
   _impl->op->run(pack);
 }
@@ -462,18 +481,52 @@ void DISCNEDepthwiseConvolutionLayer::
         ITensor* input, const ITensor* weights, const ITensor* biases,
         ITensor* output) {
   if (!_impl->is_prepared) {
-    // init run to save packed weights
-    ITensorPack run_pack = {{TensorType::ACL_SRC_1, weights},
-                            {TensorType::ACL_SRC_2, biases},
-                            {TensorType::ACL_INT_4, &_impl->packed_weights}};
-    _impl->op->prepare(run_pack);
+    ITensorPack prep_pack = {{ACL_SRC_0, input},
+                             {ACL_SRC_1, weights},
+                             {ACL_SRC_2, biases},
+                             {ACL_DST, output}};
+
+    if (auto packed_tensor =
+            _impl->persistent_pack.get_tensor(TensorType::ACL_INT_4)) {
+      prep_pack.add_tensor(TensorType::ACL_INT_4, packed_tensor);
+    } else {
+      auto& req = _impl->aux_mem_req[1];
+      _impl->workspace.emplace_back(WorkspaceDataElement<Tensor>{
+          req.slot, req.lifetime, std::make_unique<Tensor>()});
+      auto aux_tensor = _impl->workspace.back().tensor.get();
+      ARM_COMPUTE_ERROR_ON_NULLPTR(aux_tensor);
+      const auto aux_info = TensorInfo{TensorShape(req.size), 1, DataType::U8};
+      aux_tensor->allocator()->init(aux_info, req.alignment);
+      aux_tensor->allocator()->allocate();
+      _impl->persistent_pack.add_tensor(TensorType::ACL_INT_4, aux_tensor);
+      prep_pack.add_tensor(TensorType::ACL_INT_4, aux_tensor);
+    }
+    _impl->op->prepare(prep_pack);
     _impl->is_prepared = true;
   }
+}
+
+const ITensorPack& DISCNEDepthwiseConvolutionLayer::
+    NEDepthwiseConvolutionLayerOptimizedInternal::get_packed_weight() {
+  return _impl->persistent_pack;
+}
+
+void DISCNEDepthwiseConvolutionLayer::
+    NEDepthwiseConvolutionLayerOptimizedInternal::reuse_packed_weight(
+        const ITensorPack& pack) {
+  _impl->persistent_pack = pack;
+}
+
+std::string DISCNEDepthwiseConvolutionLayer::
+    NEDepthwiseConvolutionLayerOptimizedInternal::get_md5_for_packed_weight() {
+  return calculate_md5(_impl->workspace);
 }
 
 struct DISCNEDepthwiseConvolutionLayer::NEDepthwiseConvolutionLayerGeneric::
     Impl {
   std::shared_ptr<cpu::CpuDepthwiseConv2d> op{nullptr};
+  WorkspaceData<Tensor> workspace{};
+  ITensorPack persistent_pack{};
 };
 
 DISCNEDepthwiseConvolutionLayer::NEDepthwiseConvolutionLayerGeneric::
@@ -535,6 +588,22 @@ void DISCNEDepthwiseConvolutionLayer::NEDepthwiseConvolutionLayerGeneric::run(
   pack.add_tensor(TensorType::ACL_DST_0, output);
 
   _impl->op->run(pack);
+}
+
+const ITensorPack& DISCNEDepthwiseConvolutionLayer::
+    NEDepthwiseConvolutionLayerGeneric::get_packed_weight() {
+  return _impl->persistent_pack;
+}
+
+void DISCNEDepthwiseConvolutionLayer::NEDepthwiseConvolutionLayerGeneric::
+    reuse_packed_weight(const ITensorPack& pack) {
+  // no packed weight for this kernel, just skip.
+  return;
+}
+
+std::string DISCNEDepthwiseConvolutionLayer::
+    NEDepthwiseConvolutionLayerGeneric::get_md5_for_packed_weight() {
+  return calculate_md5(_impl->workspace);
 }
 
 DISCNEDepthwiseConvolutionLayer::DISCNEDepthwiseConvolutionLayer(
@@ -626,6 +695,157 @@ void DISCNEDepthwiseConvolutionLayer::prepare(ITensor* input,
     default:
       ARM_COMPUTE_ERROR("DepthwiseConvolutionFunction not properly configured");
   }
+}
+
+const ITensorPack& DISCNEDepthwiseConvolutionLayer::get_packed_weight() {
+  if (_impl->depth_conv_func == DepthwiseConvolutionFunction::OPTIMIZED) {
+    return _impl->func_optimized.get_packed_weight();
+  } else if (_impl->depth_conv_func == DepthwiseConvolutionFunction::GENERIC) {
+    return _impl->func_generic.get_packed_weight();
+  } else {
+    ARM_COMPUTE_ERROR("DepthwiseConvolutionFunction not properly configured");
+  }
+}
+
+void DISCNEDepthwiseConvolutionLayer::reuse_packed_weight(
+    const ITensorPack& pack) {
+  if (_impl->depth_conv_func == DepthwiseConvolutionFunction::OPTIMIZED) {
+    return _impl->func_optimized.reuse_packed_weight(pack);
+  } else if (_impl->depth_conv_func == DepthwiseConvolutionFunction::GENERIC) {
+    return _impl->func_generic.reuse_packed_weight(pack);
+  } else {
+    ARM_COMPUTE_ERROR("DepthwiseConvolutionFunction not properly configured");
+  }
+}
+
+std::string DISCNEDepthwiseConvolutionLayer::get_md5_for_packed_weight() {
+  if (_impl->depth_conv_func == DepthwiseConvolutionFunction::OPTIMIZED) {
+    return _impl->func_optimized.get_md5_for_packed_weight();
+  } else if (_impl->depth_conv_func == DepthwiseConvolutionFunction::GENERIC) {
+    return _impl->func_generic.get_md5_for_packed_weight();
+  } else {
+    ARM_COMPUTE_ERROR("DepthwiseConvolutionFunction not properly configured");
+  }
+}
+
+//////////////////// NEGEMMLowpMatrixMultiplyCore /////////////////
+
+struct DISCNEGEMMLowpMatrixMultiplyCore::Impl {
+  const ITensor* b{nullptr};
+  std::unique_ptr<cpu::CpuGemmLowpMatrixMultiplyCore> op{nullptr};
+  // persistent tensors are usually those buffers that are used to store packed
+  // weights.
+  ITensorPack persistent_pack{};
+  MemoryRequirements aux_mem_req{};
+  WorkspaceData<Tensor> workspace{};
+  bool is_prepared{false};
+};
+
+DISCNEGEMMLowpMatrixMultiplyCore::DISCNEGEMMLowpMatrixMultiplyCore(
+    std::shared_ptr<IMemoryManager> memory_manager,
+    IWeightsManager* weights_manager)
+    : _impl(std::make_unique<Impl>()) {}
+DISCNEGEMMLowpMatrixMultiplyCore::~DISCNEGEMMLowpMatrixMultiplyCore() = default;
+
+void DISCNEGEMMLowpMatrixMultiplyCore::configure(const ITensor* a,
+                                                 const ITensor* b,
+                                                 const ITensor* c,
+                                                 ITensor* output,
+                                                 const GEMMInfo& gemm_info) {
+  ARM_COMPUTE_ERROR_ON_NULLPTR(a, b, output);
+  _impl->b = b;
+  _impl->op = std::make_unique<cpu::CpuGemmLowpMatrixMultiplyCore>();
+  _impl->op->configure(a->info(), b->info(),
+                       (c != nullptr ? c->info() : nullptr), output->info(),
+                       gemm_info);
+  _impl->aux_mem_req = _impl->op->workspace();
+}
+
+Status DISCNEGEMMLowpMatrixMultiplyCore::validate(const ITensorInfo* a,
+                                                  const ITensorInfo* b,
+                                                  const ITensorInfo* c,
+                                                  const ITensorInfo* output,
+                                                  const GEMMInfo& gemm_info) {
+  return cpu::CpuGemmLowpMatrixMultiplyCore::validate(a, b, c, output,
+                                                      gemm_info);
+}
+
+void DISCNEGEMMLowpMatrixMultiplyCore::run() {
+  ARM_COMPUTE_ERROR("Not supported.");
+}
+
+void DISCNEGEMMLowpMatrixMultiplyCore::prepare() {
+  ARM_COMPUTE_ERROR("Not supported.");
+}
+
+void DISCNEGEMMLowpMatrixMultiplyCore::run(ITensor* a, const ITensor* b,
+                                           const ITensor* c, ITensor* output) {
+  prepare(a, b, c, output);
+
+  ITensorPack run_pack = {{TensorType::ACL_SRC_0, a},
+                          {TensorType::ACL_SRC_1, b},
+                          {TensorType::ACL_SRC_2, c},
+                          {TensorType::ACL_DST, output}};
+  DISCAllocator allocator;
+  DISCBuffers buffers;
+  auto workspace = manage_runtime_workspace<Tensor>(
+      _impl->aux_mem_req, run_pack, _impl->persistent_pack, allocator, buffers);
+  _impl->op->run(run_pack);
+}
+
+void DISCNEGEMMLowpMatrixMultiplyCore::prepare(ITensor* a, const ITensor* b,
+                                               const ITensor* c,
+                                               ITensor* output) {
+  if (!_impl->is_prepared) {
+    ITensorPack prep_pack = {{TensorType::ACL_SRC_0, a},
+                             {TensorType::ACL_SRC_1, b},
+                             {TensorType::ACL_SRC_2, c},
+                             {TensorType::ACL_DST, output}};
+
+    std::vector<Tensor*> temporary_tensors;
+    for (const auto& req : _impl->aux_mem_req) {
+      if (req.size == 0) continue;
+      // re-use from exsiting buffer whenever possible.
+      if (auto aux_tensor = _impl->persistent_pack.get_tensor(req.slot)) {
+        prep_pack.add_tensor(req.slot, aux_tensor);
+        continue;
+      }
+
+      const auto aux_info = TensorInfo{TensorShape(req.size), 1, DataType::U8};
+      _impl->workspace.emplace_back(WorkspaceDataElement<Tensor>{
+          req.slot, req.lifetime, std::make_unique<Tensor>()});
+      auto aux_tensor = _impl->workspace.back().tensor.get();
+      ARM_COMPUTE_ERROR_ON_NULLPTR(aux_tensor);
+      aux_tensor->allocator()->init(aux_info, req.alignment);
+      aux_tensor->allocator()->allocate();
+      prep_pack.add_tensor(req.slot, aux_tensor);
+      if (req.lifetime == experimental::MemoryLifetime::Persistent) {
+        _impl->persistent_pack.add_tensor(req.slot, aux_tensor);
+      } else {
+        temporary_tensors.push_back(aux_tensor);
+      }
+    }
+
+    _impl->op->prepare(prep_pack);
+
+    for (auto aux_tensor : temporary_tensors) {
+      aux_tensor->allocator()->free();
+    }
+    _impl->is_prepared = true;
+  }
+}
+
+const ITensorPack& DISCNEGEMMLowpMatrixMultiplyCore::get_packed_weight() {
+  return _impl->persistent_pack;
+}
+
+void DISCNEGEMMLowpMatrixMultiplyCore::reuse_packed_weight(
+    const ITensorPack& pack) {
+  _impl->persistent_pack = pack;
+}
+
+std::string DISCNEGEMMLowpMatrixMultiplyCore::get_md5_for_packed_weight() {
+  return calculate_md5(_impl->workspace);
 }
 
 }  // namespace arm_compute

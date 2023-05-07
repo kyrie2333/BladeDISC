@@ -1,5 +1,6 @@
 # BladeDISC Introduction <!-- omit in toc -->
 
+- [What's New](#whats-new)
 - [Overview](#overview)
   - [Features and Roadmap](#features-and-roadmap)
     - [Frontend Framework Support Matrix](#frontend-framework-support-matrix)
@@ -18,7 +19,14 @@
 - [Building Status](#building-status)
 - [FAQ](#faq)
   - [Roadmap with mlir-hlo Project](#roadmap-with-mlir-hlo-project)
+  - [Roadmap with Torch-MLIR Project](#roadmap-with-torch-mlir-project)
 - [Contact Us](#contact-us)
+
+## What's New
+
++ [🔥 2023.03.17] BladeDISC v0.4.0: [Messive performance and feature updates](https://github.com/alibaba/BladeDISC/releases/tag/v0.4.0)
++ [2022.12.08] BladeDISC v0.3.0:
+ [Announce PyTorch 2.0 Compilation Support](https://github.com/alibaba/BladeDISC/releases/tag/v0.3.0)
 
 ## Overview
 
@@ -50,7 +58,7 @@ documents for developers.
 [1] TensorFlow 1.12, 1.15, 2.4 & 2.5 are supported and fully verified. For other
 versions some slight works on adaptation might be needed.
 
-[2] 1.6.0 <= PyTorch version < 1.9.0 has been fully verified.
+[2] PyTorch version >= 1.6.0 has been fully verified.
 
 [3] Although supported, there's much room for improvement on Op coverage for
 training workloads.
@@ -146,7 +154,7 @@ import torch_blade
 class MyModule(nn.Module):
     ...
 
-module = MyModule()
+module = MyModule().eval()
 
 with torch.no_grad():
     # blade_module is the optimized module by BladeDISC
@@ -176,7 +184,7 @@ for PyTorch Users](./docs/quickstart.md#quickstart-for-pytorch-users).
 * [Tutorial: A Walkthough of the BladeDISC Pass Pipeline](./docs/developers/pass_pipeline.md)
 * [Introduction on Runtime Abstraction Layer](./docs/developers/runtime_abstraction_layer.md)
 * [TorchBlade Overview](./docs/developers/bladedisc_torch_overview.md)
-* [Tutorial: How to Add a New Torch Operator Converter](./docs/developers/torch_add_a_new_converter.md)
+* [Tutorial: How to Add a New Torch Operator](./docs/developers/torch_add_a_new_operator.md)
 
 ## Presentations and Talks
 * [Performance optimization practice for dynamic shape AI workloads via a compiler-based approach](https://bladedisc.oss-cn-hangzhou.aliyuncs.com/docs/performance-optimization-practice.pdf)
@@ -184,6 +192,8 @@ for PyTorch Users](./docs/quickstart.md#quickstart-for-pytorch-users).
 * [2022/07/07 BladeDISC and Torch-MLIR Roadmap Talk on Torch-MLIR Community](https://bladedisc.oss-cn-hangzhou.aliyuncs.com/docs/BladeDISC-and-TorchMLIR-Roadmap-tts.pptx)
 * [GTC22-S41073, Generalized and Transparent AI Optimization Solutions with AI Compilers from Cloud Service](https://bladedisc.oss-cn-hangzhou.aliyuncs.com/docs/GTC22%20S41073%2C%20Generalized%20and%20Transparent%20AI%20Optimization%20Solutions%20with%20AI%20Compilers%20from%20Cloud%20Service.pdf)
 * [GTC22-S41395, Easier-to-use and More Robust TensorRT via PAI-Blade](https://bladedisc.oss-cn-hangzhou.aliyuncs.com/docs/GTC22-S41395%2C%20Easier-to-use%20and%20More%20Robust%20TensorRT%20via%20PAI-Blade.pdf)
+* [2023/2/17 bladedisc intro. (cpu vendor oriented)](https://bladedisc.oss-cn-hangzhou.aliyuncs.com/docs/bladedisc-intro-for-intel.pdf)
+* [2023/3/10 transform dialect based codegen in bladedisc](https://bladedisc.oss-cn-hangzhou.aliyuncs.com/docs/transform-dialect-based-codegen-in-bladedisc.pdf)
 
 ## How to Contribute
 
@@ -213,6 +223,14 @@ blocks, including the MHLO Op definitions, TF to MHLO conversions, and some
 general purpose passes have been upstreamed to mlir-hlo repository. We'll
 continue to work in a close cooperative relationship with mlir-hlo project in
 the longer term.
+
+### Roadmap with Torch-MLIR Project
+
+BladeDISC compiles PyTorch workloads based on [Torch-MLIR](https://github.com/llvm/torch-mlir/).
+The BladeDISC Dev Team is cooperating with the community to add Torch-To-Mhlo conversion
+to Torch-MLIR, especially fully dynamic shape features.
+See RFC: https://github.com/llvm/torch-mlir/issues/999.
+We appeal to the community developers interested in joining.
 
 ## Contact Us
 

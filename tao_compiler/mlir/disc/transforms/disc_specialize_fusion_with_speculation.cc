@@ -12,20 +12,20 @@
 // This file implements the logic for specializing the fusion kernel with
 // speculation.
 
-#include "mlir-hlo/Dialect/lhlo/IR/lhlo_ops.h"
-#include "mlir-hlo/utils/codegen_utils.h"
-#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "lhlo/IR/lhlo_ops.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
-#include "mlir/IR/BlockAndValueMapping.h"
+#include "mlir/IR/IRMapping.h"
 #include "mlir/IR/MLIRContext.h"  // TF:llvm-project
 #include "mlir/Pass/Pass.h"       // TF:local_config_mlir
-#include "tensorflow/compiler/mlir/disc/disc_util.h"
-#include "tensorflow/compiler/mlir/disc/transforms/PassDetail.h"
-#include "tensorflow/compiler/mlir/disc/transforms/codegen_utils.h"
-#include "tensorflow/compiler/mlir/disc/transforms/fusion_utils.h"
-#include "tensorflow/compiler/mlir/disc/transforms/placement_utils.h"
+#include "mlir/disc/disc_util.h"
+#include "mlir/disc/transforms/PassDetail.h"
+#include "mlir/disc/transforms/codegen_utils.h"
+#include "mlir/disc/transforms/fusion_utils.h"
+#include "mlir/disc/transforms/placement_utils.h"
 #include "tensorflow/core/util/env_var.h"
+#include "utils/codegen_utils.h"
 
 namespace mlir {
 namespace disc_ral {
@@ -84,18 +84,8 @@ bool HasCandidateBroadcastOp(FusionOp fusion_op) {
   return false;
 }
 
-Value createViewLike(OpBuilder& b, Location loc, Value from, Value to) {
-  SmallVector<Value> toShape = getShapeValues(&b, to);
-  auto toType = to.getType().cast<MemRefType>();
-  auto fromType = from.getType().cast<MemRefType>();
-  auto targetType =
-      MemRefType::get(toType.getShape(), fromType.getElementType(),
-                      toType.getLayout(), toType.getMemorySpace());
-  return CastMemRefTo(b, loc, from, targetType, toShape);
-}
-
 struct ShapeConstraintIRCloneContext {
-  BlockAndValueMapping valueMapping;
+  IRMapping valueMapping;
   DenseMap<Value, SmallVector<SymbolicDimOp>> value2Symbols;
   DenseMap<SymbolicDimOp, SymbolicDimOp> symbolMapping;
   SymbolicDimMgr* mgr = nullptr;
@@ -318,7 +308,7 @@ struct DiscSpecializeFusionWithSpeculationPass
             SymbolicDimOp rootSym = ctx.mgr->getRootSymbolicDim(sym);
             newAttrs.push_back(FlatSymbolRefAttr::get(rootSym));
             newShapeValues.push_back(symbolicDim2SSAValue[rootSym]);
-            newShape.push_back(rootSym.isDynamic() ? ShapedType::kDynamicSize
+            newShape.push_back(rootSym.isDynamic() ? ShapedType::kDynamic
                                                    : rootSym.getDimSize());
           }
           auto oldType = operand.getType().cast<MemRefType>();
@@ -471,11 +461,18 @@ struct DiscSpecializeFusionWithSpeculationPass
   // TODO(feiwen): add more kTileW=8/kTileH pairs by if/elseif/else
   void DoColReductionSpeculation(FusionOp fusion_op) {
     // We only do specialization fusion op on GPU a.t.m.
+    bool use_new = false;
+    static const char* env = getenv("NEW_COL");
+    if (env != nullptr) {
+      use_new = std::string(env) == "1" || std::string(env) == "2" ||
+                std::string(env) == "4" || std::string(env) == "8";
+    }
+
     if (!placement_utils::isGpuMhlo(fusion_op)) {
       return;
     }
 
-    if (core_count_ == -1 || max_threads_per_core_ == -1) {
+    if ((core_count_ == -1 || max_threads_per_core_ == -1) && (!use_new)) {
       // Do not know about device information.
       return;
     }
@@ -499,8 +496,9 @@ struct DiscSpecializeFusionWithSpeculationPass
     Value row_size = b.create<memref::DimOp>(loc, operand, 0);
     Value col_size = b.create<memref::DimOp>(loc, operand, 1);
     Value matrix_size = b.create<arith::MulIOp>(loc, row_size, col_size);
-    int thread_per_block = 256;
+    int thread_per_block = kThreadsRowReduction;
     Value cur_threads = b.create<arith::ConstantIndexOp>(loc, thread_per_block);
+    // b.create<arith::ConstantIndexOp>(loc, max_threads_per_block_);
     Value cur_blocks =
         b.create<arith::CeilDivSIOp>(loc, matrix_size, cur_threads);
     Value ref_blocks = b.create<arith::ConstantIndexOp>(loc, core_count_);
@@ -514,13 +512,15 @@ struct DiscSpecializeFusionWithSpeculationPass
         b.getIntegerAttr(b.getIntegerType(32), DISC_TILE_W8_H32);
     auto w8_h16_schedule =
         b.getIntegerAttr(b.getIntegerType(32), DISC_TILE_W8_H16);
-    auto num_thread_256_attr = b.getIntegerAttr(b.getIntegerType(32), 256);
-    auto num_thread_128_attr = b.getIntegerAttr(b.getIntegerType(32), 128);
-    fusion_op->setAttr(kThreadPerBlockHint, num_thread_256_attr);
+    auto num_thread_full_attr =
+        b.getIntegerAttr(b.getIntegerType(32), kThreadsRowReduction);
+    auto num_thread_half_attr =
+        b.getIntegerAttr(b.getIntegerType(32), kThreadsRowReduction / 2);
+    fusion_op->setAttr(kThreadPerBlockHint, num_thread_full_attr);
     fusion_op->setAttr(kColReductionScheduleHint, w8_h32_schedule);
     // use 8*32 tile if block# >= SM#
     addFusionTag(b, fusion_op, "8w32h");
-    cloned->setAttr(kThreadPerBlockHint, num_thread_128_attr);
+    cloned->setAttr(kThreadPerBlockHint, num_thread_half_attr);
     cloned->setAttr(kColReductionScheduleHint, w8_h16_schedule);
     // one 8*16 tile if block# < SM#
     addFusionTag(b, cloned, "8w16h");
@@ -544,12 +544,14 @@ struct DiscSpecializeFusionWithSpeculationPass
     // Already have a hint
     if (fusion_op->getAttrOfType<IntegerAttr>(kVectorizeOrTileHint)) return;
 
+    bool enable_mem_intensive_opt_expreimental =
+        isMemIntensiveOptExperimentalEnabled();
     FusionType fusion_type = getFusionType(fusion_op.getOperation());
     if (fusion_type != FusionType::kLoop &&
         fusion_type != FusionType::kRowReduction &&
         (fusion_type != FusionType::kStitch ||
          (fusion_type == FusionType::kStitch &&
-          isMemIntensiveOptExperimentalEnabled()))) {
+          enable_mem_intensive_opt_expreimental))) {
       // TODO: support tile optimization for kStitch fusion when
       // `DISC_MEM_INTENSIVE_OPT_EXPERIMENTAL` is `true`.
       return;
@@ -559,14 +561,16 @@ struct DiscSpecializeFusionWithSpeculationPass
     // concatenate operator will peform a bad case on bert model.
     // Skip optimization of concatenate operator here.
     FusionPatternBase fusion_pattern(fusion_op);
-    if (isMemIntensiveOptExperimentalEnabled()) {
-      // skip if the root is concatenate operator
-      for (auto root_op : fusion_pattern.getRootOps()) {
-        if (isa<lmhlo::ConcatenateOp>(root_op)) {
-          return;
-        }
+    bool contain_concatenate = false;
+    // Currently, skip `enable_mem_intensive_opt_expreimental` if the fusion
+    // contains concatenate operator.
+    for (auto op : fusion_pattern.getOpList()) {
+      if (isa<lmhlo::ConcatenateOp>(op)) {
+        contain_concatenate = true;
+        break;
       }
     }
+    enable_mem_intensive_opt_expreimental &= !contain_concatenate;
 
     // TODO: aware of row-reduction hints.
 
@@ -620,7 +624,7 @@ struct DiscSpecializeFusionWithSpeculationPass
       Operation* dominant_equivalent_op = fusion_pattern.getRootOps().back();
       Value out_element_number =
           emitNumElementsComputation(b, loc, dominant_equivalent_op);
-      if (isMemIntensiveOptExperimentalEnabled()) {
+      if (enable_mem_intensive_opt_expreimental) {
         // Maximize the vector-size according to data type of all outputs. The
         // maximum vector-size is 8 (128 / 16).
         auto& results = fusion_pattern.getResults();
@@ -642,7 +646,7 @@ struct DiscSpecializeFusionWithSpeculationPass
               loc, out_element_number,
               b.create<arith::ConstantIndexOp>(loc, vector_size)),
           b.create<arith::ConstantIndexOp>(loc, 0));
-      if (isMemIntensiveOptExperimentalEnabled()) {
+      if (enable_mem_intensive_opt_expreimental) {
         pred = divisible;
       } else {
         Value threshold =

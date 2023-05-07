@@ -12,20 +12,20 @@ limitations under the License.
 
 // This file defines quantized conv related custom calls.
 
-#include "mlir-hlo/Dialect/lhlo/IR/lhlo_ops.h"
-#include "mlir-hlo/Dialect/mhlo/IR/hlo_ops.h"
-#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "lhlo/IR/lhlo_ops.h"
+#include "mhlo/IR/hlo_ops.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/PatternMatch.h"
-#include "tensorflow/compiler/mlir/disc/IR/custom_call_base.h"
-#include "tensorflow/compiler/mlir/disc/IR/disc_ral_ops.h"
-#include "tensorflow/compiler/mlir/disc/IR/hlo_disc_ops.h"
-#include "tensorflow/compiler/mlir/disc/IR/lhlo_disc_ops.h"
-#include "tensorflow/compiler/mlir/disc/disc_util.h"
-#include "tensorflow/compiler/mlir/disc/transforms/codegen_utils.h"
-#include "tensorflow/compiler/mlir/disc/transforms/fusion_utils.h"
-#include "tensorflow/compiler/mlir/disc/transforms/placement_utils.h"
+#include "mlir/disc/IR/custom_call_base.h"
+#include "mlir/disc/IR/disc_ral_ops.h"
+#include "mlir/disc/IR/hlo_disc_ops.h"
+#include "mlir/disc/IR/lhlo_disc_ops.h"
+#include "mlir/disc/disc_util.h"
+#include "mlir/disc/transforms/codegen_utils.h"
+#include "mlir/disc/transforms/fusion_utils.h"
+#include "mlir/disc/transforms/placement_utils.h"
 
 namespace mlir {
 namespace mhlo_disc {
@@ -65,7 +65,7 @@ LogicalResult reifyReturnTypeShapesDconvI8I8I8Impl(
   };
 
   SmallVector<Value> spatial_padding_values;
-  auto config = op.backend_config().cast<DictionaryAttr>();
+  auto config = op.getBackendConfig().cast<DictionaryAttr>();
   auto dimension_numbers =
       config.getAs<mhlo::ConvDimensionNumbersAttr>("dimension_numbers");
   auto input_spatial_dimensions_attr =

@@ -19,7 +19,9 @@ limitations under the License.
 #include <algorithm>
 #include <utility>
 
-#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "lhlo/IR/lhlo_ops.h"
+#include "llvm/Support/Debug.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Bufferization/Transforms/Bufferize.h"
 #include "mlir/Dialect/Func/Transforms/FuncConversions.h"
@@ -29,23 +31,23 @@ limitations under the License.
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/AffineMap.h"
 #include "mlir/IR/Attributes.h"
-#include "mlir/IR/BlockAndValueMapping.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Location.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
-#include "tensorflow/compiler/mlir/disc/IR/disc_shape_ops.h"
-#include "tensorflow/compiler/mlir/disc/IR/hlo_disc_ops.h"
-#include "tensorflow/compiler/mlir/disc/IR/lhlo_disc_ops.h"
-#include "tensorflow/compiler/mlir/disc/transforms/PassDetail.h"
-#include "tensorflow/compiler/mlir/disc/transforms/codegen_utils.h"
-#include "tensorflow/compiler/mlir/disc/transforms/disc_map_hlo_to_lhlo_op.h"
-#include "tensorflow/compiler/mlir/disc/transforms/rewriters.h"
+#include "mlir/disc/IR/disc_shape_ops.h"
+#include "mlir/disc/IR/hlo_disc_ops.h"
+#include "mlir/disc/IR/lhlo_disc_ops.h"
+#include "mlir/disc/transforms/PassDetail.h"
+#include "mlir/disc/transforms/codegen_utils.h"
+#include "mlir/disc/transforms/disc_map_hlo_to_lhlo_op.h"
+#include "mlir/disc/transforms/rewriters.h"
 
 namespace mlir {
 namespace mhlo_disc {
@@ -69,7 +71,7 @@ Value InsertDynamicAlloc(Location loc, Value result, Value shape_operand,
   // Extract the required element out of the vector.
   SmallVector<Value, 4> dynamic_operands;
   for (auto shape_element : llvm::enumerate(result_type.getShape())) {
-    if (shape_element.value() != ShapedType::kDynamicSize) continue;
+    if (shape_element.value() != ShapedType::kDynamic) continue;
     Value index =
         rewriter->create<arith::ConstantIndexOp>(loc, shape_element.index());
     Value alloc_operand =
@@ -176,10 +178,31 @@ struct HloToLhloCustomCallOpConverter : public BaseOpConversion<CustomCallOp> {
     // for args and outputs.
     const int32_t segments[2] = {static_cast<int32_t>(operands.size()),
                                  static_cast<int32_t>(op->getNumResults())};
-    lhloOp->setAttr(lhloOp.getOperandSegmentSizeAttr(),
-                    rewriter.getI32VectorAttr(segments));
+    auto attrValue = mlir::DenseI32ArrayAttr::get(op->getContext(), segments);
+    lhloOp->setAttr(lhloOp.getOperandSegmentSizeAttr(), attrValue);
 
     rewriter.replaceOp(op, ArrayRef<Value>(buffer_args).slice(operands.size()));
+    return success();
+  }
+};
+
+struct HloToLhloCustomCallOpV2Converter
+    : public BaseOpConversion<CustomCallV2Op> {
+ public:
+  using BaseOpConversion<CustomCallV2Op>::BaseOpConversion;
+
+  LogicalResult matchAndRewrite(
+      CustomCallV2Op hloOp, OpAdaptor adaptor,
+      ConversionPatternRewriter& rewriter) const override {
+    Location loc = hloOp->getLoc();
+    SmallVector<Type> resultTypes;
+    for (Value v : hloOp->getResults()) {
+      auto ty = v.getType().cast<RankedTensorType>();
+      resultTypes.push_back(
+          MemRefType::get(ty.getShape(), ty.getElementType()));
+    }
+    rewriter.replaceOpWithNewOp<lmhlo_disc::CustomCallV2Op>(
+        hloOp, resultTypes, adaptor.getOperands(), hloOp->getAttrs());
     return success();
   }
 };
@@ -209,27 +232,6 @@ struct TieShapeOpConverter : public BaseOpConversion<TieShapeOp> {
   }
 };
 
-// TODO(lanbo.llb): Support there is one -1 in new_shape
-struct SparseReshapeOpConverter
-    : public BaseOpConversion<mhlo_disc::SparseReshapeOp> {
- public:
-  using BaseOpConversion<mhlo_disc::SparseReshapeOp>::BaseOpConversion;
-
-  LogicalResult matchAndRewrite(
-      mhlo_disc::SparseReshapeOp op, OpAdaptor adaptor,
-      ConversionPatternRewriter& rewriter) const override {
-    auto loc = op.getLoc();
-    auto operands = adaptor.getOperands();
-
-    SmallVector<Value, 2> buffer_args(operands.begin(), operands.end());
-    if (failed(ConvertResults(op, buffer_args, rewriter))) return failure();
-    auto sparse_reshape_op = rewriter.create<lmhlo_disc::SparseReshapeOp>(
-        loc, llvm::None, buffer_args);
-    rewriter.replaceOp(op, ArrayRef<Value>(buffer_args).slice(operands.size()));
-    return success();
-  }
-};
-
 struct DiscHloLegalizeToLhlo
     : public DiscHloLegalizeToLhloPassBase<DiscHloLegalizeToLhlo> {
   using DiscHloLegalizeToLhloPassBase<
@@ -237,7 +239,8 @@ struct DiscHloLegalizeToLhlo
 
   void getDependentDialects(DialectRegistry& registry) const override {
     registry.insert<lmhlo_disc::LmhloDiscDialect, memref::MemRefDialect,
-                    shape::ShapeDialect>();
+                    shape::ShapeDialect, bufferization::BufferizationDialect,
+                    lmhlo::LmhloDialect>();
   }
 
  public:
@@ -247,10 +250,10 @@ struct DiscHloLegalizeToLhlo
     auto& context = getContext();
     RewritePatternSet patterns(&context);
     ConversionTarget target(context);
-    target.addLegalDialect<
-        arith::ArithmeticDialect, lmhlo_disc::LmhloDiscDialect,
-        bufferization::BufferizationDialect, memref::MemRefDialect,
-        shape::ShapeDialect, tensor::TensorDialect>();
+    target.addLegalDialect<arith::ArithDialect, lmhlo_disc::LmhloDiscDialect,
+                           bufferization::BufferizationDialect,
+                           memref::MemRefDialect, shape::ShapeDialect,
+                           tensor::TensorDialect, lmhlo::LmhloDialect>();
     target.addIllegalDialect<mhlo_disc::MhloDiscDialect>();
     target.addIllegalOp<disc_shape::TieShapeOp>();
 
@@ -271,9 +274,16 @@ void populateDiscHLOToLHLOConversionPattern(
   patterns->insert<
       HloToLhloOpConverter<mhlo_disc::H2DOp>,
       HloToLhloOpConverter<mhlo_disc::D2HOp>,
+      HloToLhloOpConverter<mhlo_disc::QuantizedDotGeneralOp>,
+      HloToLhloOpConverter<mhlo_disc::QuantizedDynamicConvOp>,
+      HloToLhloOpConverter<mhlo_disc::SparseReshapeOp>,
+      HloToLhloOpConverter<mhlo_disc::SparseFillEmptyRowsOp>,
+      HloToLhloOpConverter<mhlo_disc::SparseSegmentReductionOp>,
+      HloToLhloOpConverter<mhlo_disc::SparseSegmentReductionWithEmptyRowsOp>,
+      HloToLhloOpConverter<mhlo_disc::WhereOp>,
       HloToLhloCustomCallOpConverter,
-      TieShapeOpConverter,
-      SparseReshapeOpConverter
+      HloToLhloCustomCallOpV2Converter,
+      TieShapeOpConverter
   >(*converter, context);
   // clang-format on
 }

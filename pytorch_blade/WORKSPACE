@@ -2,6 +2,7 @@ workspace(name = "org_torch_blade")
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+load("//bazel/torch_mlir:repo.bzl", "blade_http_archive")
 
 http_archive(
     name = "com_github_bazelbuild_buildtools",
@@ -9,6 +10,15 @@ http_archive(
     strip_prefix = "buildtools-4.2.2",
     urls = [
         "https://github.com/bazelbuild/buildtools/archive/refs/tags/4.2.2.tar.gz",
+    ],
+)
+
+http_archive(
+    name = "bazel_skylib",
+    sha256 = "74d544d96f4a5bb630d465ca8bbcfe231e3594e5aae57e1edbf17a6eb3ca2506",
+    urls = [
+        "https://storage.googleapis.com/mirror.tensorflow.org/github.com/bazelbuild/bazel-skylib/releases/download/1.3.0/bazel-skylib-1.3.0.tar.gz",
+        "https://github.com/bazelbuild/bazel-skylib/releases/download/1.3.0/bazel-skylib-1.3.0.tar.gz",
     ],
 )
 
@@ -98,13 +108,13 @@ torch_pybind11_configure(
 )
 
 local_repository(
-    name = "org_mhlo_builder",
-    path = "../mhlo_builder",
+    name = "org_tensorflow",
+    path = "../tf_community",
 )
 
 local_repository(
-    name = "org_tensorflow",
-    path = "../tf_community",
+    name = "org_disc_compiler",
+    path = "../tao_compiler",
 )
 
 load("@org_third_party//bazel:blade_disc_dnn_workspace.bzl", "blade_disc_dnn_workspace")
@@ -123,10 +133,16 @@ new_local_repository(
     path = "../../platform_alibaba/blade_gemm"
 )
 
-new_local_repository(
+blade_http_archive(
   name = "mlir-hlo",
-  build_file = "third_party/torch-mlir/externals/mlir-hlo/BUILD",
-  path = "../tf_community/tensorflow/compiler/xla/mlir_hlo"
+  sha256 = "bce00918ba51fc6d49e4728e4f406024ffb0f478bfb2f5f9c4afc7eea333be19",
+  strip_prefix = "mlir-hlo-a7595eada93275d031140451648798e631381c3b",
+  urls = [
+    "https://github.com/tensorflow/mlir-hlo/archive/a7595eada93275d031140451648798e631381c3b.zip",
+  ],
+  patch_file = [
+    "//bazel/torch_mlir:disable-simplify-dynamic-gather-to-gather.patch",
+  ]
 )
 
 new_local_repository(
@@ -160,3 +176,7 @@ tf_workspace1()
 load("@org_tensorflow//tensorflow:workspace0.bzl", "tf_workspace0")
 
 tf_workspace0()
+
+load("@org_disc_compiler//build_tools/bazel:workspace.bzl", "disc_compiler_workspace")
+
+disc_compiler_workspace()

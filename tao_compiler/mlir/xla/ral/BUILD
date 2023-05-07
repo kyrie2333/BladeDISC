@@ -16,35 +16,26 @@ load(
     "if_cuda_is_configured",
     "cuda_library",
 )
-load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm_is_configured")
+load("@local_config_rocm//rocm:build_defs.bzl","if_dcu", "if_rocm_is_configured")
 load(
     "@com_google_protobuf//:protobuf.bzl",
     "cc_proto_library",
 )
-load("//tensorflow/compiler/mlir/disc:disc.bzl",
+load("//mlir/util:util.bzl",
      "disc_cc_library",
      "if_cuda_or_rocm",
      "if_platform_alibaba",
-     "if_patine",
      "if_blade_gemm",
      "if_mkldnn",
      "if_disc_aarch64",
      "if_disc_x86",
      "if_torch_disc",
+     "if_internal_serving",
 )
 
 package(
     default_visibility = ["//visibility:public"],
     licenses = ["notice"],  # Apache 2.0
-)
-
-cc_proto_library(
-    name = "compile_metadata",
-    srcs = ["compile_metadata.proto"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//tensorflow/core:protos_all_cc",
-    ],
 )
 
 cc_library(
@@ -54,6 +45,19 @@ cc_library(
     ],
     hdrs = [
         "ral_logging.h",
+    ],
+    deps = [
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "ral_md5",
+    srcs = [
+        "ral_md5.cc",
+    ],
+    hdrs = [
+        "ral_md5.h",
     ],
     deps = [
     ],
@@ -145,21 +149,36 @@ cc_library(
 )
 
 cc_library(
-    name = "real_disc_patine_client_deps",
-    srcs = [],
-    hdrs = [],
-    copts = ["-Itao/third_party/PatineClient/build/install/include"],
-    linkopts = [
-      "-Ltao/third_party/PatineClient/build/install/lib64",
-      "-Wl,--start-group tao/third_party/PatineClient/build/intel/lib/libmkl_intel_ilp64.a tao/third_party/PatineClient/build/intel/lib/libmkl_gnu_thread.a tao/third_party/PatineClient/build/intel/lib/libmkl_core.a -Wl,--end-group",
+    name = "pdll_util",
+    srcs = ["context/pdll_util.cc"],
+    hdrs = ["context/pdll_util.h"],
+    deps = [
+        ":ral_context",
+        ":ral_logging",
     ],
-    deps = ["//tao/third_party/PatineClient:patine_client"],
+    alwayslink = 1,
 )
 
-
 cc_library(
-    name = "disc_patine_client_deps",
-    deps = if_platform_alibaba([":real_disc_patine_client_deps"])
+    name = "ral_metadata",
+    srcs = ["ral_metadata.cc"],
+    hdrs = ["ral_metadata.h"],
+    deps = [],
+    alwayslink = 1,
+)
+
+tf_cc_test(
+    name = "ral_metadata_test",
+    size = "small",
+    srcs = [
+        "ral_metadata_test.cc",
+    ],
+    deps = [
+        ":ral_metadata",
+        "@org_tensorflow//tensorflow/core:test_main",
+        "@org_tensorflow//tensorflow/core:test",
+        "@org_tensorflow//tensorflow/core:testlib",
+    ],
 )
 
 cc_library(
@@ -169,6 +188,7 @@ cc_library(
         ["//tao/blade_gemm:blade_gemm"],
     )
 )
+
 cc_library(
     name = "disc_blade_gemm_deps",
     deps = if_platform_alibaba([
@@ -249,7 +269,6 @@ cc_library(
         "@onednn//:onednn",  # acl is not needed in `deps` since the dependency is carried by `onednn`
     ] + if_disc_x86([
         "@mkl_include//:mkl_include",
-        # "@mkl_static//:mkl_static_lib",
     ]),
     alwayslink = 1,
 )
@@ -258,18 +277,20 @@ cc_library(
     name = "common_context",
     srcs = [
         "context/common_context_impl.cc",
+        "context/common_context_impl_pdll.cc",
     ] + if_cuda_or_rocm([
         "context/common_context_impl_cuda.cc",
         "context/stream_executor_based_impl.cc",
     ]) + if_cuda([
         "context/cuda_impl_sparse.cc",
-    ]) + if_patine([
-        "context/common_context_impl_patine.cc",
+        "context/quantized_gpu_kernel_impl.cc",
     ]) + if_mkldnn([
         "context/common_context_impl_mkldnn.cc",
         "context/common_context_impl_quantization.cc",
     ]) + if_disc_aarch64([
         "context/common_context_impl_acl.cc",
+    ]) + if_blade_gemm([
+        "context/stream_executor_expand_impl.cc",
     ]),
     hdrs = [
         "context/common_context_impl.h",
@@ -277,43 +298,56 @@ cc_library(
         "context/stream_executor_based_impl.h",
     ]) + if_mkldnn([
         "context/common_context_impl_mkldnn.h",
+        "context/common_context_impl_quantization.h",
     ]) + if_disc_aarch64([
         "context/common_context_impl_acl.h",
     ]),
     copts = [
-        # "-DTF_1_12",
         "-fopenmp",
-    ] + if_cuda_or_rocm(["-DTAO_RAL_USE_STREAM_EXECUTOR"]),
+    ] + if_dcu(["-DTENSORFLOW_USE_DCU=1"])
+    + if_cuda_or_rocm(["-DTAO_RAL_USE_STREAM_EXECUTOR"]),
     linkopts = [
         "-fopenmp",
-        "-ldl"
-    ],
+        "-ldl",
+        "-lm"
+    ] + if_blade_gemm([
+        "-Wl,--start-group",
+        "$(location @mkl_static//:lib)/libmkl_intel_ilp64.a",
+        "$(location @mkl_static//:lib)/libmkl_gnu_thread.a",
+        "$(location @mkl_static//:lib)/libmkl_core.a",
+        "-Wl,--end-group",
+    ]),
     deps = [
+        ":pdll_util",
         ":ral_context",
         ":ral_cpu_driver",
         ":ral_logging",
+        ":ral_metadata",
         ":context_util",
-        ":compile_metadata",
-        "@com_google_absl//absl/strings"
+        "@com_google_absl//absl/strings",
+	"@org_tensorflow//tensorflow/core/platform:status",
+        "@org_tensorflow//tensorflow/core/platform:statusor",
     ] + if_cuda_is_configured([
-        "//tensorflow/stream_executor:cuda_platform",
+        "@org_tensorflow//tensorflow/compiler/xla/stream_executor/cuda:all_runtime",
         "@local_config_cuda//cuda:cuda_driver",
         "@local_config_cuda//cuda:cuda_headers",
     ]) + if_rocm_is_configured([
-        "//tensorflow/stream_executor:rocm_platform",
-        "//tensorflow/stream_executor/rocm:rocm_driver",
+        "@org_tensorflow//tensorflow/stream_executor:rocm_platform",
+        "@org_tensorflow//tensorflow/stream_executor/rocm:rocm_driver",
         "@local_config_rocm//rocm:rocm_headers",
     ]) + if_cuda_or_rocm([
         ":ral_gpu_driver",
-        "//tensorflow/core:lib",
-        "//tensorflow/core:stream_executor_headers_lib",
-        "//tensorflow/core:framework",
-    ]) + if_patine([
-        ":disc_patine_client_deps",
+        "@org_tensorflow//tensorflow/core:lib",
+        "@org_tensorflow//tensorflow/core:stream_executor_headers_lib",
+        "@org_tensorflow//tensorflow/core:framework",
     ]) + if_blade_gemm([
         ":disc_blade_gemm_deps",
     ]) + if_mkldnn([
         ":disc_mkl_cmake",
+        ":ral_md5",
+    ]),
+    data = if_blade_gemm([
+        "@mkl_static//:lib",
     ]),
     alwayslink = 1,
 )
@@ -379,7 +413,6 @@ cc_library(
     ],
     hdrs = [
     ],
-    #copts = ["-DTF_1_12"],
     deps = [
         ":ral_context",
         ":ral_gpu_driver",
@@ -387,18 +420,79 @@ cc_library(
         ":ral_logging",
         ":context_util",
         ":random_gpu_lib",
-        "//tensorflow/core:lib",
-        "//tensorflow/core:stream_executor_headers_lib",
+        "@org_tensorflow//tensorflow/core:lib",
+        "@org_tensorflow//tensorflow/core:stream_executor_headers_lib",
         "@com_google_absl//absl/strings",
     ] + if_cuda_is_configured([
-        "//tensorflow/stream_executor:cuda_platform",
+        "@org_tensorflow//tensorflow/compiler/xla/stream_executor/cuda:all_runtime",
         "@local_config_cuda//cuda:cuda_driver",
         "@local_config_cuda//cuda:cuda_headers",
     ]) + if_rocm_is_configured([
-        "//tensorflow/stream_executor:rocm_platform",
-        "//tensorflow/stream_executor/rocm:rocm_driver",
+        "@org_tensorflow//tensorflow/stream_executor:rocm_platform",
+        "@org_tensorflow//tensorflow/stream_executor/rocm:rocm_driver",
         "@local_config_rocm//rocm:rocm_headers",
     ]),
+    alwayslink = 1,
+)
+
+tf_gpu_kernel_library(
+    name = "transpose_gpu_lib",
+    srcs = [
+        "context/custom_library/transpose_gpu.cu.cc",
+        "context/custom_library/tf_transpose.cu.h",
+    ],
+    hdrs = [
+        "context/custom_library/transpose.h",
+        "context/custom_library/dimensions.h",
+        "context/custom_library/gpu_helper.h"
+    ],
+    includes = [
+        "",
+    ],
+    copts = if_cuda_is_configured([
+        "-DGOOGLE_CUDA=1"
+    ]) + if_cuda_or_rocm([
+        "-DTAO_RAL_USE_STREAM_EXECUTOR"
+    ]),
+    deps = [":common_context"] + if_cuda_is_configured([
+        "@cub_archive//:cub",
+        "@local_config_cuda//cuda:cuda_headers",
+    ]) + if_rocm_is_configured([
+        "@local_config_rocm//rocm:rocm_headers",
+    ]),
+    #alwayslink = 1,
+)
+
+cc_library(
+    name = "transpose",
+    srcs = [
+        "context/transpose_impl.cc",
+    ],
+    deps = [
+        ":ral_context",
+        ":ral_gpu_driver",
+        ":ral_cpu_driver",
+        ":ral_logging",
+        ":context_util",
+        ":transpose_gpu_lib",
+        "@org_tensorflow//tensorflow/core:lib",
+        "@org_tensorflow//tensorflow/core:stream_executor_headers_lib",
+        "@com_google_absl//absl/strings",
+    ] + if_cuda_is_configured([
+        "@org_tensorflow//tensorflow/compiler/xla/stream_executor/cuda:all_runtime",
+        "@local_config_cuda//cuda:cuda_driver",
+        "@local_config_cuda//cuda:cuda_headers",
+    ]) + if_rocm_is_configured([
+        "@org_tensorflow//tensorflow/stream_executor:rocm_platform",
+        "@org_tensorflow//tensorflow/stream_executor/rocm:rocm_driver",
+        "@local_config_rocm//rocm:rocm_headers",
+    ]),
+    copts = if_cuda_is_configured([
+        "-DGOOGLE_CUDA=1"
+    ]) + if_dcu([
+        "-DTENSORFLOW_USE_DCU=1"
+    ]) + if_cuda_or_rocm(["-DTAO_RAL_USE_STREAM_EXECUTOR"]),
+
     alwayslink = 1,
 )
 
@@ -415,14 +509,14 @@ cc_library(
     deps = [
         ":common_context",
         ":ral_logging",
-        "//tensorflow/core:lib",
+        "@org_tensorflow//tensorflow/core:lib",
         "@com_google_absl//absl/strings",
     ] + if_cuda_is_configured([
-        "//tensorflow/stream_executor:cuda_platform",
+        "@org_tensorflow//tensorflow/compiler/xla/stream_executor/cuda:all_runtime",
         "@local_config_cuda//cuda:cuda_driver",
         "@local_config_cuda//cuda:cuda_headers",
     ]) + if_rocm_is_configured([
-        "//tensorflow/stream_executor:rocm_platform",
+        "@org_tensorflow//tensorflow/stream_executor:rocm_platform",
     ]),
     alwayslink = 1,
 )
@@ -451,9 +545,11 @@ cc_library(
         ":ral_logging",
         "@com_google_absl//absl/strings",
         "@curl",
-        "//third_party/eigen3",
+        "@org_tensorflow//third_party/eigen3",
     ] + if_cuda_or_rocm([
-        "//tensorflow/core:stream_executor_headers_lib",
+        "@org_tensorflow//tensorflow/core:stream_executor_headers_lib",
+    ]) + if_blade_gemm([
+        ":disc_blade_gemm_deps"
     ]),
     alwayslink = 1,
     visibility = ["//visibility:public"],
@@ -480,15 +576,15 @@ disc_cc_library(
         ":ral_library",
         ":ral_logging",
         ":random",
-        ":compile_metadata",
-        "//tensorflow/core:lib",
+        ":transpose",
+        "@org_tensorflow//tensorflow/core:lib",
         "@com_google_absl//absl/strings",
         "@curl",
     ] + if_rocm_is_configured([
-        "//tensorflow/stream_executor/rocm:rocm_platform",
-        "//tensorflow/stream_executor/rocm:rocm_driver",
+        "@org_tensorflow//tensorflow/compiler/xla/stream_executor/rocm:rocm_platform",
+        "@org_tensorflow//tensorflow/compiler/xla/stream_executor/rocm:rocm_driver",
     ]) + if_cuda_is_configured([
-        "//tensorflow/stream_executor/cuda:cuda_platform",
+        "@org_tensorflow//tensorflow/compiler/xla/stream_executor/cuda:cuda_platform",
         "@local_config_cuda//cuda:cuda_driver",
     ]),
     alwayslink = 1,
@@ -501,12 +597,12 @@ tf_cc_shared_object(
         "//conditions:default": [
             "-z defs",
             "-Wl,--version-script",  #  This line must be directly followed by the version_script.lds file
-            "$(location //tensorflow/compiler/mlir/xla/ral:context_version_scripts.lds)",
+            "$(location //mlir/xla/ral:context_version_scripts.lds)",
         ],
     }),
     deps = [
         ":ral_base_cpu_context_impl",
-        "//tensorflow/compiler/mlir/xla/ral:context_version_scripts.lds",
+        "//mlir/xla/ral:context_version_scripts.lds",
     ] + if_cuda_or_rocm([
         ":ral_base_cuda_context_impl",
     ]))
@@ -531,6 +627,7 @@ tf_gpu_kernel_library(
     ],
     hdrs = [
         "context/custom_library/dynamic_sort.h",
+        "context/custom_library/gpu_helper.h"
     ],
     copts = if_rocm_is_configured([
         "-DTENSORFLOW_USE_ROCM=1",
@@ -547,32 +644,53 @@ tf_gpu_kernel_library(
 )
 
 ###########################################################################################
+
+cc_library(
+    name = "tf_deps",
+    deps = if_internal_serving(
+        [
+            "@com_google_absl//absl/types:variant",
+            "@org_tensorflow//tensorflow/core:lib",
+            "@org_tensorflow//tensorflow/core:framework",
+            "@org_tensorflow//tensorflow/core:core_cpu",
+            "@org_tensorflow//tensorflow/core:stream_executor_no_cuda",
+            "@org_tensorflow//tensorflow/stream_executor:stream_executor_impl",
+        ],
+        [
+            "@local_config_tf//:libtensorflow_framework",
+            "@local_config_tf//:tf_header_lib",
+        ],
+    ),
+    alwayslink = 1,
+)
+
 # The targets following are for tf bridge side build. Get rid of all the deps from tf source code, only use some of the `.bzl` utils from tensorflow.
 
 cc_library(
     name = "common_context_bridge",
     srcs = [
         "context/common_context_impl.cc",
-        "//tensorflow/compiler/mlir/xla:compile_metadata_bridge_genproto",
+        "context/common_context_impl_pdll.cc",
     ] + if_cuda_or_rocm([
         "context/common_context_impl_cuda.cc",
         "context/stream_executor_based_impl.cc",
     ]) + if_cuda([
         "context/cuda_impl_sparse.cc",
-    ]) + if_patine([
-        "context/common_context_impl_patine.cc",
+        "context/quantized_gpu_kernel_impl.cc",
     ]) + if_mkldnn([
         "context/common_context_impl_mkldnn.cc",
         "context/common_context_impl_quantization.cc",
     ]) + if_disc_aarch64([
         "context/common_context_impl_acl.cc",
+    ]) + if_blade_gemm([
+        "context/stream_executor_expand_impl.cc",
     ]),
     hdrs = [
         "context/common_context_impl.h",
         "context/stream_executor_based_impl.h",
-    ] + if_cuda_or_rocm([
-    ])+ if_mkldnn([
+    ] + if_mkldnn([
         "context/common_context_impl_mkldnn.h",
+        "context/common_context_impl_quantization.h",
     ]) + if_disc_aarch64([
         "context/common_context_impl_acl.h",
     ]),
@@ -581,24 +699,35 @@ cc_library(
         "-DDISC_BUILD_FROM_TF_BRIDGE"
     ] + if_cuda_or_rocm([
         "-DTAO_RAL_USE_STREAM_EXECUTOR"
+    ]) + if_dcu([
+        "-DTENSORFLOW_USE_DCU=1"
     ]) + if_rocm_is_configured([
         "-DTENSORFLOW_USE_ROCM=1",
         "-x rocm",
+    ]) + if_internal_serving([
+        "-DTF_1_12",
+        "-DIS_PAI_TF",
     ]),
     linkopts = [
         "-fopenmp",
         "-ldl",
+        "-lm"
     ] + if_blade_gemm([
-        "-lm",
+        "-Wl,--start-group",
+        "$(location @mkl_static//:lib)/libmkl_intel_ilp64.a",
+        "$(location @mkl_static//:lib)/libmkl_gnu_thread.a",
+        "$(location @mkl_static//:lib)/libmkl_core.a",
+        "-Wl,--end-group",
     ]),
     deps = [
+        ":pdll_util",
         ":ral_context",
         ":ral_cpu_driver",
         ":ral_gpu_driver",
         ":ral_logging",
+        ":ral_metadata",
         ":context_util",
-        "@local_config_tf//:libtensorflow_framework",
-        "@local_config_tf//:tf_header_lib",
+        ":tf_deps",
     ] + if_cuda_is_configured([
         "@local_config_cuda//cuda:cuda_driver",
         "@local_config_cuda//cuda:cuda_headers",
@@ -606,8 +735,13 @@ cc_library(
         "@local_config_rocm//rocm:rocm_headers",
     ]) + if_blade_gemm([
         "@blade_gemm//:blade_gemm",
+        "@mkl_static//:mkl_static_lib",
     ]) + if_mkldnn([
         ":disc_mkl_bazel",
+        ":ral_md5",
+    ]),
+    data = if_blade_gemm([
+        "@mkl_static//:lib",
     ]),
     alwayslink = 1,
 )
@@ -626,6 +760,9 @@ cc_library(
     ] + if_rocm_is_configured([
         "-DTENSORFLOW_USE_ROCM=1",
         "-x rocm",
+    ]) + if_internal_serving([
+        "-DTF_1_12",
+        "-DIS_PAI_TF",
     ]),
     deps = [
         ":context_util",
@@ -635,8 +772,7 @@ cc_library(
         ":ral_gpu_driver",
         ":ral_library",
         "@local_config_cuda//cuda:cuda_headers",
-        "@local_config_tf//:libtensorflow_framework",
-        "@local_config_tf//:tf_header_lib",
+        ":tf_deps",
     ],
     alwayslink = 1,
 )
@@ -649,6 +785,7 @@ cuda_library(
     ],
     hdrs = [
         "context/custom_library/dynamic_sort.h",
+        "context/custom_library/gpu_helper.h"
     ],
     copts = [
         "-DDISC_BUILD_FROM_TF_BRIDGE"
@@ -657,8 +794,7 @@ cuda_library(
         "-x rocm",
     ]) + cuda_default_copts(),
     deps = [
-        "@local_config_tf//:libtensorflow_framework",
-        "@local_config_tf//:tf_header_lib",
+        ":tf_deps",
     ] + if_cuda_is_configured([
         "@cub_archive//:cub",
         "@local_config_cuda//cuda:cuda_headers",
@@ -687,8 +823,7 @@ cc_library(
         ":context_util",
         ":common_context_bridge",
         ":dynamic_sort_kernel_bridge",
-        "@local_config_tf//:libtensorflow_framework",
-        "@local_config_tf//:tf_header_lib",
+        ":tf_deps",
     ] + if_cuda_is_configured([
         "@local_config_cuda//cuda:cuda_driver",
     ]),
@@ -728,8 +863,73 @@ cc_library(
         ":ral_logging",
         ":context_util",
         ":random_gpu_lib_bridge",
-        "@local_config_tf//:libtensorflow_framework",
-        "@local_config_tf//:tf_header_lib",
+        ":tf_deps",
+    ] + if_cuda_is_configured([
+        "@local_config_cuda//cuda:cuda_driver",
+        "@local_config_cuda//cuda:cuda_headers",
+    ]) + if_rocm_is_configured([
+        "@local_config_rocm//rocm:rocm_headers",
+    ]),
+    alwayslink = 1,
+)
+
+cuda_library(
+    name = "transpose_gpu_lib_bridge",
+    srcs = [
+        "context/custom_library/transpose_gpu.cu.cc",
+        "context/custom_library/tf_transpose.cu.h",
+    ],
+    hdrs = [
+        "context/custom_library/transpose.h",
+        "context/custom_library/dimensions.h",
+        "context/custom_library/gpu_helper.h"
+    ] + if_cuda_is_configured([
+        "context/stream_executor_based_impl.h"
+    ]),
+    copts = [
+        "-DDISC_BUILD_FROM_TF_BRIDGE"
+    ] + if_rocm_is_configured([
+        "-DTENSORFLOW_USE_ROCM=1",
+        "-x rocm",
+    ]) + if_cuda_or_rocm([
+        "-DTAO_RAL_USE_STREAM_EXECUTOR"
+    ]) + cuda_default_copts(),
+    deps = [
+        ":ral_context",
+        ":tf_deps",
+    ] + if_cuda_is_configured([
+        "@cub_archive//:cub",
+        "@local_config_cuda//cuda:cuda_headers",
+    ]) + if_rocm_is_configured([
+        "@local_config_rocm//rocm:rocm_headers",
+    ]) + if_blade_gemm([
+        "@blade_gemm//:blade_gemm",
+    ]),
+)
+
+cc_library(
+    name = "transpose_bridge",
+    srcs = [
+        "context/transpose_impl.cc",
+    ],
+    copts = [
+        "-DDISC_BUILD_FROM_TF_BRIDGE",
+    ] + if_rocm_is_configured([
+        "-DTENSORFLOW_USE_ROCM=1",
+        "-x rocm",
+    ]) + if_dcu([
+        "-DTENSORFLOW_USE_DCU=1"
+    ]) + if_cuda_or_rocm([
+        "-DTAO_RAL_USE_STREAM_EXECUTOR"
+    ]) + cuda_default_copts(),
+    deps = [
+        ":ral_context",
+        ":ral_gpu_driver",
+        ":ral_cpu_driver",
+        ":ral_logging",
+        ":context_util",
+        ":transpose_gpu_lib_bridge",
+        ":tf_deps",
     ] + if_cuda_is_configured([
         "@local_config_cuda//cuda:cuda_driver",
         "@local_config_cuda//cuda:cuda_headers",
@@ -747,6 +947,7 @@ cc_library(
     ] + if_cuda_or_rocm([
         ":dynamic_sort_bridge",
         ":random_bridge",
+        ":transpose_bridge",
     ]),
     alwayslink = 1,
 )

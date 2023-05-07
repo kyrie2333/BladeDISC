@@ -9,9 +9,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "tensorflow/compiler/mlir/disc/tools/disc-replay/record.h"
+#include "mlir/disc/tools/disc-replay/record.h"
 
-#include "tensorflow/compiler/mlir/disc/tools/disc-replay/tar_helper.h"
+#include "mlir/disc/tools/disc-replay/tar_helper.h"
 #include "tensorflow/core/framework/tensor.h"
 namespace replay {
 
@@ -36,7 +36,7 @@ tensorflow::Status ReadTensorFromPb(const std::string fname,
   TF_RETURN_IF_ERROR(
       ReadBinaryProto(tensorflow::Env::Default(), fname, &tensor_proto));
   tensor->FromProto(tensor_proto);
-  return tensorflow::Status::OK();
+  return tsl::OkStatus();
 }
 
 tensorflow::Status CheckTarCommand() {
@@ -45,7 +45,7 @@ tensorflow::Status CheckTarCommand() {
         "Can not find tar command tool, please install it before using this "
         "replay toolkit.");
   }
-  return tensorflow::Status::OK();
+  return tsl::OkStatus();
 }
 
 tensorflow::Status ReplayRecord::Load() {
@@ -71,7 +71,7 @@ tensorflow::Status ReplayRecord::Load() {
     placements_.push_back(placement);
     tensors_.push_back(t);
   }
-  return tensorflow::Status::OK();
+  return tsl::OkStatus();
 }
 
 }  //  namespace replay

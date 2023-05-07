@@ -16,10 +16,10 @@
 #include "llvm/Support/FormatVariadic.h"
 #include "mlir/Pass/Pass.h"              // TF:llvm-project
 #include "mlir/Support/LogicalResult.h"  // TF:llvm-project
-#include "tensorflow/compiler/mlir/disc/disc_util.h"
+#include "mlir/disc/disc_util.h"
+#include "mlir/disc/transforms/PassDetail.h"
+#include "mlir/disc/transforms/placement_utils.h"
 #include "tensorflow/compiler/mlir/tensorflow/ir/tf_ops.h"
-#include "transforms/PassDetail.h"
-#include "transforms/placement_utils.h"
 
 namespace mlir {
 

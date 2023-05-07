@@ -12,18 +12,18 @@ limitations under the License.
 
 // This file defines topk custom call.
 
-#include "tensorflow/compiler/mlir/disc/IR/topk_custom_call_op.h"
+#include "mlir/disc/IR/topk_custom_call_op.h"
 
-#include "mlir-hlo/Dialect/mhlo/IR/hlo_ops.h"
+#include "mhlo/IR/hlo_ops.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/PatternMatch.h"
-#include "tensorflow/compiler/mlir/disc/IR/custom_call_base.h"
-#include "tensorflow/compiler/mlir/disc/IR/disc_ral_ops.h"
-#include "tensorflow/compiler/mlir/disc/IR/hlo_disc_ops.h"
-#include "tensorflow/compiler/mlir/disc/IR/lhlo_disc_ops.h"
-#include "tensorflow/compiler/mlir/disc/transforms/codegen_utils.h"
-#include "tensorflow/compiler/mlir/disc/transforms/placement_utils.h"
+#include "mlir/disc/IR/custom_call_base.h"
+#include "mlir/disc/IR/disc_ral_ops.h"
+#include "mlir/disc/IR/hlo_disc_ops.h"
+#include "mlir/disc/IR/lhlo_disc_ops.h"
+#include "mlir/disc/transforms/codegen_utils.h"
+#include "mlir/disc/transforms/placement_utils.h"
 
 using ::mlir::mhlo_disc::TopKBackendConfig;
 
@@ -53,7 +53,7 @@ LogicalResult reifyReturnTypeShapesImpl<TopKBackendConfig>(
     SmallVectorImpl<Value>& reifiedReturnShapes) {
   llvm::Expected<TopKBackendConfig> backend_config =
       llvm::json::parse<TopKBackendConfig>(
-          op.backend_config().cast<StringAttr>());
+          op.getBackendConfig().cast<StringAttr>());
   int64_t dimension = backend_config->dimension;
 
   Value keys_operand = operands[0];
@@ -134,7 +134,7 @@ LogicalResult lowerToLibraryCallImpl<TopKBackendConfig>(
   // dimension
   llvm::Expected<TopKBackendConfig> backend_config =
       llvm::json::parse<TopKBackendConfig>(
-          op.backend_config().cast<StringAttr>());
+          op.getBackendConfig().cast<StringAttr>());
   if (auto e = backend_config.takeError()) {
     return op.emitOpError() << "Problem with parsing topk backend_config: "
                             << llvm::toString(std::move(e));

@@ -12,9 +12,11 @@ limitations under the License.
 
 // This file defines the operations used in the LMHLO DISC dialect.
 
-#include "tensorflow/compiler/mlir/disc/IR/lhlo_disc_ops.h"
+#include "mlir/disc/IR/lhlo_disc_ops.h"
 
 #include <unordered_set>
+
+#include "mlir/disc/IR/lhlo_disc_enums.cc.inc"
 
 namespace mlir {
 namespace lmhlo_disc {
@@ -27,7 +29,7 @@ LmhloDiscDialect::LmhloDiscDialect(MLIRContext* context)
     : Dialect(getDialectNamespace(), context, TypeID::get<LmhloDiscDialect>()) {
   addOperations<
 #define GET_OP_LIST
-#include "tensorflow/compiler/mlir/disc/IR/lhlo_disc_ops.cc.inc"
+#include "mlir/disc/IR/lhlo_disc_ops.cc.inc"
 
       >();
   context->loadDialect<memref::MemRefDialect>();
@@ -39,8 +41,8 @@ LmhloDiscDialect::LmhloDiscDialect(MLIRContext* context)
 
 LogicalResult CustomCallOp::verify() {
   CustomCallOp op = *this;
-  if (op.target_arg_mapping()) {
-    lmhlo::CustomCallTargetArgMappingAttr mapping = *op.target_arg_mapping();
+  if (op.getTargetArgMapping()) {
+    lmhlo::CustomCallTargetArgMappingAttr mapping = *op.getTargetArgMapping();
     auto verify_mapping = [&](int64_t target_num, size_t op_num,
                               ::llvm::ArrayRef<int64_t> mapping,
                               StringRef kind) -> LogicalResult {
@@ -73,9 +75,9 @@ LogicalResult CustomCallOp::verify() {
       }
       return success();
     };
-    if (failed(verify_mapping(mapping.getNumArgs(), op.args().size(),
+    if (failed(verify_mapping(mapping.getNumArgs(), op.getArgs().size(),
                               mapping.getArgsToTargetArgs(), "args")) ||
-        failed(verify_mapping(mapping.getNumResults(), op.output().size(),
+        failed(verify_mapping(mapping.getNumResults(), op.getOutput().size(),
                               mapping.getResultsToTargetResults(), "results")))
       return failure();
   }
@@ -86,4 +88,4 @@ LogicalResult CustomCallOp::verify() {
 }  // namespace mlir
 
 #define GET_OP_CLASSES
-#include "tensorflow/compiler/mlir/disc/IR/lhlo_disc_ops.cc.inc"
+#include "mlir/disc/IR/lhlo_disc_ops.cc.inc"

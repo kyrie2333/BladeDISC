@@ -12,15 +12,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
-#include "tensorflow/compiler/mlir/disc/disc_util.h"
+#include "mlir/disc/disc_util.h"
 
 #include <numeric>
 
-#include "mlir-hlo/Dialect/lhlo/IR/lhlo_ops.h"
+#include "lhlo/IR/lhlo_ops.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Shape/IR/Shape.h"
 #include "mlir/Interfaces/ViewLikeInterface.h"
-#include "tensorflow/compiler/mlir/disc/transforms/placement_utils.h"
+#include "mlir/disc/IR/lhlo_disc_ops.h"
+#include "mlir/disc/transforms/placement_utils.h"
 #include "tensorflow/core/util/env_var.h"
 
 namespace mlir {
@@ -178,7 +179,7 @@ llvm::Optional<int32_t> TryMergeNode(GraphCycles* graph_cycles, int32_t a,
   int32_t from = graph_cycles->HasEdge(a, b) ? a : b;
   int32_t to = (from == a) ? b : a;
   auto result = graph_cycles->ContractEdge(from, to);
-  if (!result.hasValue() && has_edge_inserted_a2b) {
+  if (!result.has_value() && has_edge_inserted_a2b) {
     // Restore the graph.
     graph_cycles->RemoveEdge(a, b);
   }
@@ -217,10 +218,62 @@ bool useHorizontalFusion() {
   return enabled;
 }
 
+// Returns true if `DISC_ENABLE_TRANSFORM_SCHEDULE` is true
+bool useTransformSchedule() {
+  static bool enabled = []() {
+    bool enabled = false;
+    tensorflow::ReadBoolFromEnvVar("DISC_ENABLE_TRANSFORM_SCHEDULE", enabled,
+                                   &enabled);
+    return enabled;
+  }();
+  return enabled;
+}
+
+// Returns true if `DISC_ENABLE_TRANSFORM_GEMM_EPILOGUE_FUSION` is true.
+bool useTransformGEMMEpilogueFusionSchedule() {
+  static bool enabled = []() {
+    bool enabled = true;
+    tensorflow::ReadBoolFromEnvVar("DISC_ENABLE_TRANSFORM_GEMM_EPILOGUE_FUSION",
+                                   enabled, &enabled);
+    return enabled;
+  }();
+  return enabled;
+}
+
+bool lowerFakeQuantToQuantAndDequant() {
+  static bool enabled = []() {
+    bool enabled = false;
+    tensorflow::ReadBoolFromEnvVar("DISC_FAKE_QUANT_TO_QUANT_AND_DEQUANT",
+                                   enabled, &enabled);
+    return enabled;
+  }();
+  return enabled;
+}
+
 bool isMemIntensiveOptExperimentalEnabled() {
   static bool enabled = []() {
     bool enabled = false;
     tensorflow::ReadBoolFromEnvVar("DISC_MEM_INTENSIVE_OPT_EXPERIMENTAL",
+                                   enabled, &enabled);
+    return enabled;
+  }();
+  return enabled;
+}
+
+bool isStitchEnabled() {
+  static bool enabled = []() {
+    // Enable stitch by default.
+    bool enabled = true;
+    tensorflow::ReadBoolFromEnvVar("DISC_ENABLE_STITCH", enabled, &enabled);
+    return enabled;
+  }();
+  return enabled;
+}
+
+bool isCompIntensFusionEnabled() {
+  static bool enabled = []() {
+    bool enabled = false;
+    tensorflow::ReadBoolFromEnvVar("DISC_ENABLE_COMPUTE_INTENSIVE_FUSE",
                                    enabled, &enabled);
     return enabled;
   }();
@@ -295,6 +348,105 @@ DenseIntElementsAttr GetI64ElementsAttrForSeq(int start, int end,
 
   TensorType ty = RankedTensorType::get({size}, builder->getIntegerType(64));
   return DenseIntElementsAttr::get(ty, vals);
+}
+
+int getNumResultOperands(Operation* op) {
+  if (isa<lmhlo_disc::CustomCallOp>(op)) {
+    // TODO(disc): add a registration base mechanism to support custom call op
+    // with more than one results.
+    return 1;
+  }
+
+  if (op->getDialect()->getTypeID() != TypeID::get<lmhlo::LmhloDialect>() &&
+      op->getDialect()->getTypeID() !=
+          TypeID::get<lmhlo_disc::LmhloDiscDialect>()) {
+    return 0;
+  }
+  return llvm::count_if(op->getOperands(),
+                        [&](Value v) { return IsOpWriteValue(op, v); });
+}
+
+int getShmemSizeBytesNotAffectOccupancy(int cc_major, int cc_minor) {
+  return 8192;
+}
+
+Type getLhloOpsElementType(Operation* op) {
+  unsigned int num_operands = op->getNumOperands();
+  Type result_type = op->getOperand(num_operands - 1)
+                         .getType()
+                         .cast<MemRefType>()
+                         .getElementType();
+  return result_type;
+}
+
+Value CastMemRefTo(OpBuilder& b, Location loc, Value from, Type toType,
+                   ValueRange toShape) {
+  int64_t rank = toShape.size();
+  auto memrefTy = toType.cast<MemRefType>();
+  auto getIntAttr = [&](int64_t val) {
+    return b.getIntegerAttr(b.getIndexType(), val);
+  };
+
+  SmallVector<OpFoldResult> foldSizes;
+  for (int i = 0; i < rank; ++i) {
+    if (memrefTy.getDimSize(i) == ShapedType::kDynamic) {
+      foldSizes.push_back(toShape[i]);
+    } else {
+      foldSizes.push_back(getIntAttr(memrefTy.getDimSize(i)));
+    }
+  }
+
+  Value dynamicStride;
+  int64_t staticStride = 1;
+  SmallVector<OpFoldResult> foldStrides;
+  for (int i = rank - 1; i >= 0; --i) {
+    if (staticStride != ShapedType::kDynamic) {
+      foldStrides.push_back(getIntAttr(staticStride));
+      if (memrefTy.getDimSize(i) == ShapedType::kDynamic) {
+        dynamicStride = b.create<arith::ConstantIndexOp>(loc, staticStride);
+        staticStride = ShapedType::kDynamic;
+      } else {
+        staticStride *= memrefTy.getDimSize(i);
+      }
+    } else {
+      foldStrides.push_back(dynamicStride);
+    }
+    if (dynamicStride) {
+      dynamicStride = b.create<arith::MulIOp>(loc, dynamicStride, toShape[i]);
+    }
+  }
+
+  OpFoldResult zero{getIntAttr(0)};
+  auto reversedStrides = llvm::to_vector<4>(llvm::reverse(foldStrides));
+  auto castOp = b.create<memref::ReinterpretCastOp>(loc, memrefTy, from, zero,
+                                                    foldSizes, reversedStrides);
+  return castOp;
+}
+
+Value createViewLike(OpBuilder& b, Location loc, Value from, Value to) {
+  SmallVector<Value> toShape = getShapeValues(&b, to);
+  auto toType = to.getType().cast<MemRefType>();
+  auto fromType = from.getType().cast<MemRefType>();
+  auto targetType =
+      MemRefType::get(toType.getShape(), fromType.getElementType(),
+                      toType.getLayout(), toType.getMemorySpace());
+  return CastMemRefTo(b, loc, from, targetType, toShape);
+}
+
+SmallVector<Value> getShapeValues(OpBuilder* b, Value memref) {
+  auto shape = memref.getType().dyn_cast<ShapedType>().getShape();
+  int64_t rank = shape.size();
+  auto loc = memref.getLoc();
+
+  SmallVector<Value> result;
+  for (int i = 0; i < rank; ++i) {
+    if (shape[i] == ShapedType::kDynamic) {
+      result.push_back(b->create<memref::DimOp>(loc, memref, i));
+    } else {
+      result.push_back(b->create<arith::ConstantIndexOp>(loc, shape[i]));
+    }
+  }
+  return result;
 }
 
 // Returns 1D 64-bit dense elements attribute with the given values.

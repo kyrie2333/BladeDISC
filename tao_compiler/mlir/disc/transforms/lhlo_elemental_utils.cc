@@ -16,14 +16,19 @@ limitations under the License.
 // This file provides basic utilities for the elemental lowering of
 // each node
 
-#include "tensorflow/compiler/mlir/disc/transforms/lhlo_elemental_utils.h"
+#include "mlir/disc/transforms/lhlo_elemental_utils.h"
 
+#include "lhlo/IR/lhlo_ops.h"
+#include "lhlo/transforms/map_lmhlo_to_scalar_op.h"
 #include "llvm/Support/Debug.h"
-#include "mlir-hlo/Dialect/lhlo/IR/lhlo_ops.h"
-#include "mlir-hlo/Dialect/lhlo/transforms/map_lmhlo_to_scalar_op.h"
-#include "mlir-hlo/Dialect/mhlo/transforms/map_mhlo_to_scalar_op.h"
-#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mhlo/transforms/map_mhlo_to_scalar_op.h"
+#include "mlir/Conversion/LLVMCommon/MemRefBuilder.h"  // from @llvm-project
+#include "mlir/Conversion/LLVMCommon/Pattern.h"        // from @llvm-project
+#include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Arith/Utils/Utils.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
+#include "mlir/Dialect/LLVMIR/LLVMDialect.h"  // from @llvm-project
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/Attributes.h"
@@ -32,9 +37,10 @@ limitations under the License.
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Pass/Pass.h"
-#include "tensorflow/compiler/mlir/disc/disc_util.h"
-#include "tensorflow/compiler/mlir/disc/transforms/codegen_utils.h"
-#include "tensorflow/compiler/mlir/disc/transforms/disc_shape_optimization_utils.h"
+#include "mlir/disc/IR/lhlo_disc_ops.h"
+#include "mlir/disc/disc_util.h"
+#include "mlir/disc/transforms/codegen_utils.h"
+#include "mlir/disc/transforms/disc_shape_optimization_utils.h"
 
 using mlir::memref::DimOp;
 using mlir::memref::LoadOp;
@@ -61,6 +67,24 @@ LowerConfig::SpecificLoader* LowerConfig::getSpecificLoader(Operation* op,
   return (specific_loader == specific_loaders_.end())
              ? nullptr
              : &specific_loader->second;
+}
+
+LowerConfig::SpecificStore* LowerConfig::getSpecificStore(Operation* op,
+                                                          Value operand) {
+  auto getParentFusionOp = [&](Operation* op) {
+    auto parent = op->getParentOp();
+    while (parent != nullptr && !isa<lmhlo::FusionOp>(parent)) {
+      parent = parent->getParentOp();
+    }
+    return dyn_cast_or_null<lmhlo::FusionOp>(parent);
+  };
+  lmhlo::FusionOp fusion = getParentFusionOp(op);
+  if (fusion == nullptr) {
+    return nullptr;
+  }
+  auto specific_store = specific_stores_.find(std::make_pair(fusion, operand));
+  return (specific_store == specific_stores_.end()) ? nullptr
+                                                    : &specific_store->second;
 }
 
 Value createMaySpecificLoad(OpBuilder& b, Location loc, Operation* op,
@@ -103,12 +127,20 @@ Value createLoadOrUseCachedValue(Location loc, OpBuilder* b, Operation* op,
 
 Value mayCreateStore(OpBuilder* b, Location loc, Operation* op, Value value,
                      ValueRange out_indices, LowerConfig* lower_config) {
-  if (lower_config != nullptr && lower_config->isWrittenBack(op)) {
+  if (lower_config != nullptr) {
     Value out_memref = cast<lmhlo::LmhloOp>(op).getResultBuffer();
     if (out_memref == nullptr) {
       return nullptr;
     }
-    b->create<memref::StoreOp>(loc, value, out_memref, out_indices);
+    // Write back to off-chip memory.
+    if (lower_config->isWrittenBack(op)) {
+      b->create<memref::StoreOp>(loc, value, out_memref, out_indices);
+    }
+    // Store on on-chip memory.
+    auto store = lower_config->getSpecificStore(op, out_memref);
+    if (store != nullptr) {
+      (*store)(*b, value, out_memref, out_indices);
+    }
   }
   return nullptr;
 }
@@ -305,7 +337,7 @@ Value elementalLowerImplForBroadcastInDimOps(OpBuilder* b, Location loc,
         // we know this dim is to be broadcasted at compile time
         auto zero = b->create<arith::ConstantIndexOp>(loc, 0);
         input_index.push_back(zero);
-      } else if (static_dim_size == ShapedType::kDynamicSize) {
+      } else if (static_dim_size == ShapedType::kDynamic) {
         // we are not sure if this dim is to be broadcasted at compile time.
         // To enable more optimization opportunities when dim sizes of operand
         // value and output value are the same SSA value.
@@ -771,7 +803,7 @@ Value lowerGatherOpInternal(OpBuilder* b, Location loc, Operation* op,
     add_to_operand_index(gather_dim_component, 0);
   } else {
     int64_t index_vector_size = start_indices_ty.getDimSize(index_vector_dim);
-    assert((index_vector_size != ShapedType::kDynamicSize) &&
+    assert((index_vector_size != ShapedType::kDynamic) &&
            "dynamic index_vector_dim size for GatherOp is unexpected");
     for (int64_t i = 0; i < index_vector_size; ++i) {
       gather_index_index[index_vector_dim] =
@@ -893,7 +925,6 @@ Value elementalLower<lmhlo::ConcatenateOp>(OpBuilder* b, Location loc,
   //     store 0 to output
   //   }
   //   return T0;
-
   auto out_idx = output_index[axis];
   SmallVector<scf::IfOp> if_inbound_ops(num_input_operands);
   for (int i = num_input_operands - 1; i >= 0; --i) {
@@ -935,6 +966,60 @@ Value elementalLower<lmhlo::ConcatenateOp>(OpBuilder* b, Location loc,
   return result;
 }
 
+template <>
+Value elementalLower<lmhlo_disc::ConcatenateOp>(OpBuilder* b, Location loc,
+                                                lmhlo_disc::ConcatenateOp op,
+                                                ValueRange output_index,
+                                                bool check_cache,
+                                                LowerConfig* lower_config) {
+  size_t axis = op.getDimension();
+  size_t rank = output_index.size();
+  MLIRContext* ctx = b->getContext();
+
+  auto num_input_operands = op.getNumOperands() - 2;
+  auto zero = b->create<arith::ConstantIndexOp>(loc, 0);
+  auto one = b->create<arith::ConstantIndexOp>(loc, 1);
+
+  SmallVector<Value> axis_dim_ranges;
+  axis_dim_ranges.push_back(zero);
+  for (int i = 0; i < num_input_operands; ++i) {
+    axis_dim_ranges.push_back(b->create<arith::AddIOp>(
+        loc, getDimSizeValue(b, op.getOperand(i), axis),
+        axis_dim_ranges.back()));
+  }
+
+  // {inputs, input_ptr, out}
+  auto ptr_array = op.getOperand(op.getNumOperands() - 2);
+  auto out = op.getOperand(op.getNumOperands() - 1);
+
+  auto output_shape = getShapeValues(b, out);
+  Value linear_index = calcLinearIndex(b, loc, output_index, output_shape);
+  auto operand_index = b->create<arith::FloorDivSIOp>(
+      loc, b->getIndexType(), output_index[axis],
+      getDimSizeValue(b, op.getOperand(0), axis));
+
+  auto int_ptr =
+      b->create<memref::LoadOp>(loc, ptr_array, ValueRange{operand_index});
+  Type ptr_type = LLVM::LLVMPointerType::get(FloatType::getF32(ctx));
+  auto llvm_ptr = b->create<LLVM::IntToPtrOp>(loc, ptr_type, int_ptr);
+
+  SmallVector<Value, 4> input_index;
+  std::copy(output_index.begin(), output_index.end(),
+            std::back_inserter(input_index));
+
+  input_index[axis] = b->create<arith::SubIOp>(
+      loc, output_index[axis],
+      b->create<arith::MulIOp>(loc, operand_index,
+                               getDimSizeValue(b, op.getOperand(0), axis)));
+  Value input_offset =
+      calcLinearIndex(b, loc, input_index, getShapeValues(b, op.getOperand(0)));
+  input_offset = b->create<arith::IndexCastOp>(loc, IntegerType::get(ctx, 32),
+                                               input_offset);
+  auto llvm_elem =
+      b->create<LLVM::GEPOp>(loc, ptr_type, llvm_ptr, input_offset);
+  return b->create<LLVM::LoadOp>(loc, llvm_elem);
+}
+
 // There is no 'identityOp' in std dialect, thus we provide a basic
 // implementation here as a workaround. This can be removed once std dialect
 // supports CopyOp.
@@ -953,6 +1038,30 @@ Value elementalLower<lmhlo::CopyOp>(OpBuilder* b, Location loc,
   } else {
     result = createLoadOrUseCachedValue(loc, b, op.getOperation(),
                                         operand_memref, output_index,
+                                        b->saveInsertionPoint(), lower_config);
+  }
+  mayCreateStore(b, loc, op.getOperation(), result, output_index, lower_config);
+  return result;
+}
+
+template <>
+Value elementalLower<lmhlo_disc::H2DOp>(OpBuilder* b, Location loc,
+                                        lmhlo_disc::H2DOp op,
+                                        ValueRange output_index,
+                                        bool check_cache,
+                                        LowerConfig* lower_config) {
+  Value operand_memref = op->getOperand(0);
+  int rank = operand_memref.getType().cast<MemRefType>().getRank();
+  SmallVector<Value> zeroIndices(rank,
+                                 b->create<arith::ConstantIndexOp>(loc, 0));
+
+  Value result;
+  if (!check_cache) {
+    result = createMaySpecificLoad(*b, loc, op.getOperation(), operand_memref,
+                                   zeroIndices, lower_config);
+  } else {
+    result = createLoadOrUseCachedValue(loc, b, op.getOperation(),
+                                        operand_memref, zeroIndices,
                                         b->saveInsertionPoint(), lower_config);
   }
   mayCreateStore(b, loc, op.getOperation(), result, output_index, lower_config);
@@ -1168,11 +1277,15 @@ Value elementalLower<lmhlo::ClampOp>(OpBuilder* b, Location loc,
   Value lb_clipped =
       mhlo::impl::mapMhloOpToStdScalarOp<lmhlo::LhloToHloOp<lmhlo::MaxOp>>(
           loc, ArrayRef<Type>{elem_ty}, ArrayRef<Type>{elem_ty, elem_ty},
-          ArrayRef<Value>{operand, min}, b);
+          mhlo::MaxOp::Adaptor(ArrayRef<Value>{operand, min},
+                               op->getAttrDictionary()),
+          b);
   Value result =
       mhlo::impl::mapMhloOpToStdScalarOp<lmhlo::LhloToHloOp<lmhlo::MinOp>>(
           loc, ArrayRef<Type>{elem_ty}, ArrayRef<Type>{elem_ty, elem_ty},
-          ArrayRef<Value>{lb_clipped, max}, b);
+          mhlo::MinOp::Adaptor(ArrayRef<Value>{lb_clipped, max},
+                               op->getAttrDictionary()),
+          b);
   mayCreateStore(b, loc, op.getOperation(), result, output_index, lower_config);
   return result;
 }
@@ -1210,7 +1323,7 @@ memref::ReinterpretCastOp createMemRef1DReinterpretCast(OpBuilder& b,
   Value stride = b.create<arith::ConstantIndexOp>(loc, 1);
   Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
   auto memref_1d_type =
-      MemRefType::get({ShapedType::kDynamicSize}, memref_ty.getElementType(),
+      MemRefType::get({ShapedType::kDynamic}, memref_ty.getElementType(),
                       memref_ty.getLayout(), memref_ty.getMemorySpace());
   auto cast = b.create<memref::ReinterpretCastOp>(
       loc, memref_1d_type, memref, zero, ValueRange{size}, ValueRange{stride});
@@ -1226,7 +1339,7 @@ memref::ReinterpretCastOp createMemRef1DReinterpretCast(OpBuilder& b,
     }
   }
   if (alignment) {
-    b.create<memref::AssumeAlignmentOp>(loc, cast, alignment.alignment());
+    b.create<memref::AssumeAlignmentOp>(loc, cast, alignment.getAlignment());
   }
 
   return cast;
@@ -1276,10 +1389,10 @@ arith::AtomicRMWKind getAtomicRMWKind(Region& body) {
     if (result_elem_type.isF16() || result_elem_type.isF32() ||
         result_elem_type.isF64()) {
       return arith::AtomicRMWKind::maxf;
-    } else if (result_elem_type.isSignedInteger()) {
-      return arith::AtomicRMWKind::maxs;
-    } else if (result_elem_type.isUnsignedInteger() ||
+    } else if (result_elem_type.isSignedInteger() ||
                result_elem_type.isSignlessInteger()) {
+      return arith::AtomicRMWKind::maxs;
+    } else if (result_elem_type.isUnsignedInteger()) {
       return arith::AtomicRMWKind::maxu;
     } else {
       assert(false && "unexpected atomic reduce operation");
@@ -1288,10 +1401,10 @@ arith::AtomicRMWKind getAtomicRMWKind(Region& body) {
     if (result_elem_type.isF16() || result_elem_type.isF32() ||
         result_elem_type.isF64()) {
       return arith::AtomicRMWKind::minf;
-    } else if (result_elem_type.isSignedInteger()) {
-      return arith::AtomicRMWKind::mins;
-    } else if (result_elem_type.isUnsignedInteger() ||
+    } else if (result_elem_type.isSignedInteger() ||
                result_elem_type.isSignlessInteger()) {
+      return arith::AtomicRMWKind::mins;
+    } else if (result_elem_type.isUnsignedInteger()) {
       return arith::AtomicRMWKind::minu;
     } else {
       assert(false && "unexpected atomic reduce operation");
@@ -1337,11 +1450,19 @@ Type convertIfIntegerType(Type type) {
   return type;
 }
 
-bool needUpgradingUnsignedInteger(Operation* op) {
-  if (!llvm::any_of(op->getResults(), isUnsignedIntegerValue) &&
-      !llvm::any_of(op->getOperands(), isUnsignedIntegerValue))
-    return false;
-  return isa<lmhlo::AddOp, lmhlo::SubtractOp, lmhlo::MulOp, lmhlo::DivOp>(op);
+SmallVector<Value> convertValuesIfIntegerType(Location loc, OpBuilder* b,
+                                              ValueRange operands) {
+  SmallVector<Value> newOperands;
+  for (Value operand : operands) {
+    Type oldType = operand.getType();
+    Type newType = convertIfIntegerType(oldType);
+    Value newOperand = operand;
+    if (oldType != newType)
+      newOperand = b->create<UnrealizedConversionCastOp>(loc, newType, operand)
+                       ->getResult(0);
+    newOperands.push_back(newOperand);
+  }
+  return newOperands;
 }
 
 }  // namespace disc_ral

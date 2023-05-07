@@ -19,8 +19,8 @@ limitations under the License.
 // and on the top and bottom sides. So we manually create a new padded
 // input tensor such that we can pass it to cuDNN.
 
-#include "mlir-hlo/Dialect/mhlo/IR/hlo_ops.h"
-#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mhlo/IR/hlo_ops.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"  // TF:llvm-project
 #include "mlir/IR/Attributes.h"             // TF:llvm-project
 #include "mlir/IR/Builders.h"               // TF:llvm-project
@@ -29,9 +29,9 @@ limitations under the License.
 #include "mlir/IR/Matchers.h"               // TF:llvm-project
 #include "mlir/IR/Operation.h"              // TF:llvm-project
 #include "mlir/Pass/Pass.h"                 // TF:local_config_mlir
-#include "tensorflow/compiler/mlir/disc/disc_util.h"
-#include "transforms/PassDetail.h"
-#include "transforms/placement_utils.h"
+#include "mlir/disc/disc_util.h"
+#include "mlir/disc/transforms/PassDetail.h"
+#include "mlir/disc/transforms/placement_utils.h"
 
 namespace mlir {
 namespace disc_ral {
@@ -133,7 +133,7 @@ struct DiscGpuConvPaddingLegalizationPass
     SmallVector<Value, 4> padding_low(rank, zero);
     SmallVector<Value, 4> padding_high(rank, zero);
     SmallVector<Value, 4> padding_interior(rank, zero);
-    auto dimension_numbers = op.dimension_numbers();
+    auto dimension_numbers = op.getDimensionNumbers();
     for (const auto& en :
          llvm::enumerate(dimension_numbers.getInputSpatialDimensions())) {
       padding_low[en.value()] = other_padding_low[en.index()];
@@ -149,7 +149,7 @@ struct DiscGpuConvPaddingLegalizationPass
     Value new_padding_tensor_for_conv =
         b.create<tensor::FromElementsOp>(loc, common_padding);
 
-    SmallVector<int64_t> padded_input_shape(rank, ShapedType::kDynamicSize);
+    SmallVector<int64_t> padded_input_shape(rank, ShapedType::kDynamic);
     padded_input_shape[dimension_numbers.getInputBatchDimension()] =
         input_tp.getShape()[dimension_numbers.getInputBatchDimension()];
     padded_input_shape[dimension_numbers.getInputFeatureDimension()] =
@@ -167,9 +167,9 @@ struct DiscGpuConvPaddingLegalizationPass
   }
 
   void RewriteOp(mhlo::DynamicConvOp op) {
-    input = op.lhs();
-    filter = op.rhs();
-    padding = op.d_padding();
+    input = op.getLhs();
+    filter = op.getRhs();
+    padding = op.getDPadding();
     output = op.getResult();
 
     input_tp = input.getType().dyn_cast<RankedTensorType>();

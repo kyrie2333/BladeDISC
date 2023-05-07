@@ -9,7 +9,8 @@ func.func @fake_quant_per_tensor(%input : tensor<?x?x?x?xf32>, %scale : tensor<f
       num_bits = 8,
       quant_min = -111,
       quant_max = 111,
-      use_dynamic = false
+      use_dynamic = false,
+      round_mode = 1
   } : (tensor<?x?x?x?xf32>, tensor<f32>, tensor<i32>) -> tensor<?x?x?x?xf32>
   return %out : tensor<?x?x?x?xf32>
 }
@@ -25,7 +26,8 @@ func.func @fake_quant_per_channel(%input : tensor<?x?x?x?xf32>, %scale : tensor<
       num_bits = 8,
       quant_min = -111,
       quant_max = 111,
-      use_dynamic = false
+      use_dynamic = false,
+      round_mode = 0
   } : (tensor<?x?x?x?xf32>, tensor<?xf32>, tensor<?xi32>) -> tensor<?x?x?x?xf32>
   return %out : tensor<?x?x?x?xf32>
 }
@@ -39,7 +41,8 @@ func.func @quantize_per_tensor(%input : tensor<?x?x?x?xf32>, %scale : tensor<f32
       axis = dense<[]> : tensor<0xi64>,
       quant_min = -111,
       quant_max = 111,
-      use_dynamic = false
+      use_dynamic = false,
+      round_mode = 1
   } : (tensor<?x?x?x?xf32>, tensor<f32>, tensor<i32>) -> tensor<?x?x?x?xi8>
   return %out : tensor<?x?x?x?xi8>
 }
@@ -53,7 +56,8 @@ func.func @quantize_per_channel(%input : tensor<?x?x?x?xf32>, %scale : tensor<?x
       axis = dense<[1]> : tensor<1xi64>,
       quant_min = -111,
       quant_max = 111,
-      use_dynamic = false
+      use_dynamic = false,
+      round_mode = 0
   } : (tensor<?x?x?x?xf32>, tensor<?xf32>, tensor<?xi32>) -> tensor<?x?x?x?xi8>
   return %out : tensor<?x?x?x?xi8>
 }
@@ -65,7 +69,8 @@ func.func @dequantize_per_tensor(%input : tensor<?x?x?x?xi8>, %scale : tensor<f3
   %out = "mhlo_disc.dequantize"(%input, %scale, %zero_point) {
       use_symmetric = true,
       axis = dense<[]> : tensor<0xi64>,
-      use_dynamic = false
+      use_dynamic = false,
+      round_mode = 1
   } : (tensor<?x?x?x?xi8>, tensor<f32>, tensor<i32>) -> tensor<?x?x?x?xf32>
   return %out : tensor<?x?x?x?xf32>
 }
@@ -77,7 +82,8 @@ func.func @dequantize_per_channel(%input : tensor<?x?x?x?xi8>, %scale : tensor<?
   %out = "mhlo_disc.dequantize"(%input, %scale, %zero_point) {
       use_symmetric = true,
       axis = dense<[1]> : tensor<1xi64>,
-      use_dynamic = false
+      use_dynamic = false,
+      round_mode = 0
   } : (tensor<?x?x?x?xi8>, tensor<?xf32>, tensor<?xi32>) -> tensor<?x?x?x?xf32>
   return %out : tensor<?x?x?x?xf32>
 }
@@ -204,4 +210,47 @@ func.func @per_tensor_quantized_dynamic_conv(%input: tensor<?x?x?x?xi8>, %weight
 func.func @sparse_reshape_basic(%input_indices : tensor<?x?xi64>, %input_shape: tensor<?xi64>, %new_shape: tensor<?xi64>) -> (tensor<?x?xi64>, tensor<?xi64>) {
   %output_indices, %output_shape = "mhlo_disc.sparse_reshape"(%input_indices, %input_shape, %new_shape) {} : (tensor<?x?xi64>, tensor<?xi64>, tensor<?xi64>) -> (tensor<?x?xi64>, tensor<?xi64>)
   return %output_indices, %output_shape: tensor<?x?xi64>, tensor<?xi64>
+}
+
+// -----
+
+// CHECK-LABEL: func.func @sparse_fill_empty_rows_basic
+func.func @sparse_fill_empty_rows_basic(%indices: tensor<?x?xi64>, %values: tensor<?xi64>, %dense_shape: tensor<2xi64>, %default_value: tensor<i64>) -> (tensor<?x?xi64>, tensor<?xi64>, tensor<?xi1>, tensor<?xi64>, tensor<?xi64>) {
+  %output_indices, %output_values, %empty_row_indicator, %reverse_index_map, %output_elements = "mhlo_disc.sparse_fill_empty_rows"(%indices, %values, %dense_shape, %default_value) {} : (tensor<?x?xi64>, tensor<?xi64>, tensor<2xi64>, tensor<i64>) -> (tensor<?x?xi64>, tensor<?xi64>, tensor<?xi1>, tensor<?xi64>, tensor<?xi64>)
+  return %output_indices, %output_values, %empty_row_indicator, %reverse_index_map, %output_elements: tensor<?x?xi64>, tensor<?xi64>, tensor<?xi1>, tensor<?xi64>, tensor<?xi64>
+}
+
+// -----
+
+// CHECK-LABEL: func.func @sparse_segment_mean_basic
+func.func @sparse_segment_mean_basic(%data: tensor<?x?xf32>, %indices: tensor<?xi32>, %segment_ids: tensor<?xi32>) -> (tensor<?x?xf32>) {
+  %output = "mhlo_disc.sparse_segment_reduction"(%data, %indices, %segment_ids) { reduction_mode = 1 } : (tensor<?x?xf32>, tensor<?xi32>, tensor<?xi32>) -> (tensor<?x?xf32>)
+  return %output : tensor<?x?xf32>
+}
+
+// -----
+
+// CHECK-LABEL: func.func @where
+func.func @where(%input: tensor<?x?xf32>) -> (tensor<?x?xi64>, tensor<1xi64>) {
+  %index, %num_output_elements = "mhlo_disc.where"(%input) {} : (tensor<?x?xf32>) -> (tensor<?x?xi64>, tensor<1xi64>)
+  return %index, %num_output_elements: tensor<?x?xi64>, tensor<1xi64>
+}
+
+// -----
+
+// CHECK-LABEL: func.func @custom_call_v2
+func.func @custom_call_v2(%input: tensor<?x?xf32>, %weight : tensor<?x?xf32>) -> tensor<?x?xf32> {
+  %output = "mhlo_disc.custom_call_v2"(%input, %weight) {
+      call_target_name = "test",
+      custom_attrs = {},
+      has_side_effect = false,
+      device = "d",
+      input_placements = "d,h",
+      output_placements = "h",
+      input_layouts = "AB,AB",
+      expected_input_layouts = "AB,AB",
+      output_layouts = "Ab",
+      expected_output_layouts = "AB"
+  } : (tensor<?x?xf32>, tensor<?x?xf32>) -> tensor<?x?xf32>
+  return %output : tensor<?x?xf32>
 }

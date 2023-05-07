@@ -13,15 +13,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Shape/IR/Shape.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Attributes.h"
-#include "mlir/IR/BlockAndValueMapping.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/IRMapping.h"
 #include "mlir/IR/ImplicitLocOpBuilder.h"
 #include "mlir/IR/Location.h"
 #include "mlir/IR/MLIRContext.h"
@@ -29,8 +29,8 @@ limitations under the License.
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
-#include "tensorflow/compiler/mlir/disc/transforms/PassDetail.h"
-#include "tensorflow/compiler/mlir/disc/transforms/rewriters.h"
+#include "mlir/disc/transforms/PassDetail.h"
+#include "mlir/disc/transforms/rewriters.h"
 
 namespace mlir {
 namespace disc_ral {
@@ -64,7 +64,7 @@ LogicalResult GenerateOpConverter::matchAndRewrite(
   }
 
   // for now, only single block region is supported.
-  if (op.body().getBlocks().size() != 1) {
+  if (op.getBody().getBlocks().size() != 1) {
     op.emitError("only single block region inside generate op is supported");
     return failure();
   }
@@ -72,12 +72,12 @@ LogicalResult GenerateOpConverter::matchAndRewrite(
   Location loc = op.getLoc();
   ImplicitLocOpBuilder lb(loc, rewriter);
 
-  Block& block = op.body().front();
+  Block& block = op.getBody().front();
   int64_t numElems = resultTy.getDimSize(0);
   SmallVector<Value, 4> extentValues;
   for (int64_t i = 0; i < numElems; ++i) {
     Value idx = lb.create<arith::ConstantIndexOp>(i);
-    BlockAndValueMapping mapping;
+    IRMapping mapping;
     mapping.map(block.getArgument(0), idx);
     for (Operation& op : block.without_terminator()) {
       lb.clone(op, mapping);
@@ -103,7 +103,7 @@ void ConvertTensorToStandardPass::runOnOperation() {
   // Setup target legality.
   MLIRContext& ctx = getContext();
   ConversionTarget target(ctx);
-  target.addLegalDialect<arith::ArithmeticDialect>();
+  target.addLegalDialect<arith::ArithDialect>();
   target.addLegalOp<func::FuncOp, ModuleOp>();
   target.addLegalOp<tensor::ExtractOp, tensor::DimOp, tensor::FromElementsOp>();
   target.addIllegalOp<GenerateOp>();

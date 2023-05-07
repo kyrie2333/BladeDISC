@@ -13,11 +13,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "tensorflow/compiler/mlir/disc/utils/cycle_detector.h"
+#include "mlir/disc/utils/cycle_detector.h"
 
 #include <algorithm>
 
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 
 namespace mlir {
@@ -336,6 +337,20 @@ std::vector<int32_t> GraphCycles::AllNodesInPostOrder() const {
 
   SortInPostOrder(rep_->nodes, &all_nodes);
   return all_nodes;
+}
+
+bool GraphCycles::IsActivateNode(int32_t node) const {
+  return llvm::find(rep_->free_nodes, node) == rep_->free_nodes.end();
+}
+
+bool GraphCycles::CanContractEdge(int from, int to) {
+  if (!HasEdge(from, to)) {
+    return false;
+  }
+  RemoveEdge(from, to);
+  bool reachable = IsReachable(from, to);
+  InsertEdge(from, to);
+  return !reachable;
 }
 
 }  // namespace mlir

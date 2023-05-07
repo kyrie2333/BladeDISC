@@ -1,22 +1,22 @@
-// RUN: disc-opt -disc-lower-to-library-call %s -o - | FileCheck %s
+// RUN: disc-opt -disc-lower-to-library-call --split-input-file %s -o - | FileCheck %s
 
 // CHECK-LABEL: func.func @test_recv_input_and_send_output
 // CHECK-SAME: (%[[CTX:.*]]: !disc_ral.context) {
 func.func @test_recv_input_and_send_output(%arg0: !disc_ral.context) {
   // CHECK: %[[T0:.*]] = "disc_ral.dispatch"(%[[CTX]], %c0)
-  // CHECK-SAME: {backend_config = "cpu", call_target_name = "ral_recv_input", has_side_effect = false} :
+  // CHECK-SAME: {backend_config = "", call_target_name = "ral_recv_input", device = "cpu", has_side_effect = false} :
   // CHECK-SAME: (!disc_ral.context, index) -> memref<?x?xf32>
 
   // CHECK: %[[T1:.*]] = "disc_ral.dispatch"(%[[CTX]], %c1)
-  // CHECK-SAME: {backend_config = "cpu", call_target_name = "ral_recv_input", has_side_effect = false} :
+  // CHECK-SAME: {backend_config = "", call_target_name = "ral_recv_input", device = "cpu", has_side_effect = false} :
   // CHECK-SAME: (!disc_ral.context, index) -> memref<?x?xf32>
 
   // CHECK: "disc_ral.dispatch"(%[[CTX]], %c0, %[[T0]])
-  // CHECK-SAME: {backend_config = "cpu", call_target_name = "ral_send_output", has_side_effect = false} :
+  // CHECK-SAME: {backend_config = "", call_target_name = "ral_send_output", device = "cpu", has_side_effect = false} :
   // CHECK-SAME: (!disc_ral.context, index, memref<?x?xf32>) -> ()
 
   // CHECK: "disc_ral.dispatch"(%[[CTX]], %c1, %[[T1]])
-  // CHECK-SAME: {backend_config = "cpu", call_target_name = "ral_send_output", has_side_effect = false} :
+  // CHECK-SAME: {backend_config = "", call_target_name = "ral_send_output", device = "cpu", has_side_effect = false} :
   // CHECK-SAME: (!disc_ral.context, index, memref<?x?xf32>) -> ()
   %c1 = arith.constant 1 : index
   %c0 = arith.constant 0 : index
@@ -43,10 +43,10 @@ func.func @h2d_dynamic_shape(%arg0: !disc_ral.context) {
   // CHECK: %[[T0:.*]] = llvm.mlir.constant(0 : i32) : i32
   // CHECK: %[[STREAM:.*]] = llvm.inttoptr %[[T0:.*]] : i32 to !llvm.ptr<i8>
   // CHECK: "disc_ral.dispatch"(%[[CTX]], %[[STREAM]]
-  // CHECK-SAME: {backend_config = "gpu", call_target_name = "h2d", has_side_effect = false}
+  // CHECK-SAME: {backend_config = "", call_target_name = "h2d", device = "gpu", has_side_effect = false}
 
   // CHECK: "disc_ral.dispatch"(%[[CTX]], %[[STREAM]])
-  // CHECK-SAME: {backend_config = "gpu", call_target_name = "sync_on_stream", has_side_effect = false}
+  // CHECK-SAME: {backend_config = "", call_target_name = "sync_on_stream", device = "gpu", has_side_effect = false}
   "lmhlo_disc.h2d"(%0, %3) : (memref<?x?xf32>, memref<?x?xf32>) -> ()
 
   "disc_ral.send_output"(%arg0, %c0, %3) : (!disc_ral.context, index, memref<?x?xf32>) -> ()
@@ -68,10 +68,10 @@ func.func @d2h_dynamic_shape(%arg0: !disc_ral.context) {
   // CHECK: %[[T0:.*]] = llvm.mlir.constant(0 : i32) : i32
   // CHECK: %[[STREAM:.*]] = llvm.inttoptr %[[T0:.*]] : i32 to !llvm.ptr<i8>
   // CHECK: "disc_ral.dispatch"(%[[CTX]], %[[STREAM]]
-  // CHECK-SAME: {backend_config = "gpu", call_target_name = "d2h", has_side_effect = false}
+  // CHECK-SAME: {backend_config = "", call_target_name = "d2h", device = "gpu", has_side_effect = false}
 
   // CHECK: "disc_ral.dispatch"(%[[CTX]], %[[STREAM]])
-  // CHECK-SAME: {backend_config = "gpu", call_target_name = "sync_on_stream", has_side_effect = false}
+  // CHECK-SAME: {backend_config = "", call_target_name = "sync_on_stream", device = "gpu", has_side_effect = false}
   "lmhlo_disc.d2h"(%0, %3) : (memref<?x?xf32>, memref<?x?xf32>) -> ()
 
   "disc_ral.send_output"(%arg0, %c0, %3) : (!disc_ral.context, index, memref<?x?xf32>) -> ()
@@ -90,10 +90,10 @@ func.func @h2d_static_shape(%arg0: !disc_ral.context) {
   // CHECK: %[[T0:.*]] = llvm.mlir.constant(0 : i32) : i32
   // CHECK: %[[STREAM:.*]] = llvm.inttoptr %[[T0:.*]] : i32 to !llvm.ptr<i8>
   // CHECK: "disc_ral.dispatch"(%[[CTX]], %[[STREAM]]
-  // CHECK-SAME: {backend_config = "gpu", call_target_name = "h2d", has_side_effect = false}
+  // CHECK-SAME: {backend_config = "", call_target_name = "h2d", device = "gpu", has_side_effect = false}
 
   // CHECK: "disc_ral.dispatch"(%[[CTX]], %[[STREAM]])
-  // CHECK-SAME: {backend_config = "gpu", call_target_name = "sync_on_stream", has_side_effect = false}
+  // CHECK-SAME: {backend_config = "", call_target_name = "sync_on_stream", device = "gpu", has_side_effect = false}
   "lmhlo_disc.h2d"(%0, %1) : (memref<2x2xf32>, memref<2x2xf32>) -> ()
 
   "disc_ral.send_output"(%arg0, %c0, %1) : (!disc_ral.context, index, memref<2x2xf32>) -> ()
@@ -112,10 +112,10 @@ func.func @d2h_static_shape(%arg0: !disc_ral.context) {
   // CHECK: %[[T0:.*]] = llvm.mlir.constant(0 : i32) : i32
   // CHECK: %[[STREAM:.*]] = llvm.inttoptr %[[T0:.*]] : i32 to !llvm.ptr<i8>
   // CHECK: "disc_ral.dispatch"(%[[CTX]], %[[STREAM]]
-  // CHECK-SAME: {backend_config = "gpu", call_target_name = "d2h", has_side_effect = false}
+  // CHECK-SAME: {backend_config = "", call_target_name = "d2h", device = "gpu", has_side_effect = false}
 
   // CHECK: "disc_ral.dispatch"(%[[CTX]], %[[STREAM]])
-  // CHECK-SAME: {backend_config = "gpu", call_target_name = "sync_on_stream", has_side_effect = false}
+  // CHECK-SAME: {backend_config = "", call_target_name = "sync_on_stream", device = "gpu", has_side_effect = false}
   "lmhlo_disc.d2h"(%0, %1) : (memref<2x2xf32>, memref<2x2xf32>) -> ()
 
   "disc_ral.send_output"(%arg0, %c0, %1) : (!disc_ral.context, index, memref<2x2xf32>) -> ()
@@ -273,8 +273,8 @@ func.func @topk_dynamic_shape(%arg0: !disc_ral.context) {
   // CHECK: %[[T0:.*]] = llvm.mlir.constant(0 : i32) : i32
   // CHECK: %[[STREAM:.*]] = llvm.inttoptr %[[T0:.*]] : i32 to !llvm.ptr<i8>
   // CHECK: "disc_ral.dispatch"(%[[CTX]], %[[STREAM]]
-  // CHECK-SAME: {backend_config = "gpu", call_target_name = "ral_dsort", has_side_effect = false}
-  "lmhlo_disc.custom_call"(%0, %1, %2, %6, %7) {backend_config = "{\22dimension\22:1}", call_target_name = "topk", disc.device = "gpu", has_side_effect = false, operand_segment_sizes = dense<[3, 2]> : vector<2xi32>} : (memref<?x?xf32, "gpu">, memref<?x?xi32, "gpu">, memref<i32, "cpu">, memref<?x?xf32, "gpu">, memref<?x?xi32, "gpu">) -> ()
+  // CHECK-SAME: {backend_config = "", call_target_name = "ral_dsort", device = "gpu", has_side_effect = false}
+  "lmhlo_disc.custom_call"(%0, %1, %2, %6, %7) {backend_config = "{\22dimension\22:1}", call_target_name = "topk", disc.device = "gpu", has_side_effect = false, operand_segment_sizes = array<i32: 3, 2>} : (memref<?x?xf32, "gpu">, memref<?x?xi32, "gpu">, memref<i32, "cpu">, memref<?x?xf32, "gpu">, memref<?x?xi32, "gpu">) -> ()
   %c0_0 = arith.constant 0 : index
   "disc_ral.send_output"(%arg0, %c0_0, %6) : (!disc_ral.context, index, memref<?x?xf32, "gpu">) -> ()
   %c1_1 = arith.constant 1 : index
@@ -300,8 +300,8 @@ func.func @topk_static_shape(%arg0: !disc_ral.context) {
   // CHECK: %[[T0:.*]] = llvm.mlir.constant(0 : i32) : i32
   // CHECK: %[[STREAM:.*]] = llvm.inttoptr %[[T0:.*]] : i32 to !llvm.ptr<i8>
   // CHECK: "disc_ral.dispatch"(%[[CTX]], %[[STREAM]]
-  // CHECK-SAME: {backend_config = "gpu", call_target_name = "ral_dsort", has_side_effect = false}
-  "lmhlo_disc.custom_call"(%0, %1, %2, %5, %6) {backend_config = "{\22dimension\22:1}", call_target_name = "topk", disc.device = "gpu", has_side_effect = false, operand_segment_sizes = dense<[3, 2]> : vector<2xi32>} : (memref<2x16xf32, "gpu">, memref<2x16xi32, "gpu">, memref<i32, "cpu">, memref<2x?xf32, "gpu">, memref<2x?xi32, "gpu">) -> ()
+  // CHECK-SAME: {backend_config = "", call_target_name = "ral_dsort", device = "gpu", has_side_effect = false}
+  "lmhlo_disc.custom_call"(%0, %1, %2, %5, %6) {backend_config = "{\22dimension\22:1}", call_target_name = "topk", disc.device = "gpu", has_side_effect = false, operand_segment_sizes = array<i32: 3, 2>} : (memref<2x16xf32, "gpu">, memref<2x16xi32, "gpu">, memref<i32, "cpu">, memref<2x?xf32, "gpu">, memref<2x?xi32, "gpu">) -> ()
   %c0_0 = arith.constant 0 : index
   "disc_ral.send_output"(%arg0, %c0_0, %5) : (!disc_ral.context, index, memref<2x?xf32, "gpu">) -> ()
   %c1_1 = arith.constant 1 : index
@@ -442,5 +442,89 @@ func.func @dynamic_conv(%arg0: !disc_ral.context) {
   memref.dealloc %68 : memref<?x?x?x?xf32, "gpu">
   %c0_2 = arith.constant 0 : index
   "disc_ral.send_output"(%arg0, %c0_2, %69) : (!disc_ral.context, index, memref<?x?x?x?xf32, "gpu">) -> ()
+  return
+}
+
+// -----
+
+// CHECK-LABEL: quantized_dynamic_conv
+func.func @quantized_dynamic_conv(%arg0: !disc_ral.context) {
+  %c0 = arith.constant 0 : index
+  %0 = "disc_ral.recv_input"(%arg0, %c0) : (!disc_ral.context, index) -> memref<?x?x?x?xi8, "gpu">
+  %c1 = arith.constant 1 : index
+  %1 = "disc_ral.recv_input"(%arg0, %c1) : (!disc_ral.context, index) -> memref<?x?x?x?xi8, "gpu">
+  %c2 = arith.constant 2 : index
+  %2 = "disc_ral.recv_input"(%arg0, %c2) : (!disc_ral.context, index) -> memref<4xi32, "cpu">
+  %c3 = arith.constant 3 : index
+  %3 = "disc_ral.recv_input"(%arg0, %c3) : (!disc_ral.context, index) -> memref<f32, "gpu">
+  %c4 = arith.constant 4 : index
+  %4 = "disc_ral.recv_input"(%arg0, %c4) : (!disc_ral.context, index) -> memref<i32, "gpu">
+  %c5 = arith.constant 5 : index
+  %5 = "disc_ral.recv_input"(%arg0, %c5) : (!disc_ral.context, index) -> memref<f32, "gpu">
+  %c6 = arith.constant 6 : index
+  %6 = "disc_ral.recv_input"(%arg0, %c6) : (!disc_ral.context, index) -> memref<i32, "gpu">
+  %c7 = arith.constant 7 : index
+  %7 = "disc_ral.recv_input"(%arg0, %c7) : (!disc_ral.context, index) -> memref<f32, "gpu">
+  %c8 = arith.constant 8 : index
+  %8 = "disc_ral.recv_input"(%arg0, %c8) : (!disc_ral.context, index) -> memref<i32, "gpu">
+  %c9 = arith.constant 9 : index
+  %9 = "disc_ral.recv_input"(%arg0, %c9) : (!disc_ral.context, index) -> memref<?x?x?x?xi8, "gpu">
+  // CHECK: memref.store {{.*}}, %[[PADDING:.*]][%c16] : memref<17xi32, "cpu">
+  // CHECK: disc_ral.dispatch
+  // CHECK-SAME: backend_config = ""
+  // CHECK-SAME: call_target_name = "ral_qconv"
+  // CHECK-SAME: device = "gpu"
+  // CHECK-NOT: lmhlo_disc.quantized_dynamic_conv
+  "lmhlo_disc.quantized_dynamic_conv"(%0, %1, %2, %3, %4, %5, %6, %7, %8, %9) {
+    axis = dense<> : tensor<0xi64>,
+    batch_group_count = 1 : i64,
+    dimension_numbers = #mhlo.conv<[b, f, 0, 1]x[o, i, 0, 1]->[b, f, 0, 1]>,
+    feature_group_count = 1 : i64,
+    rhs_dilation = dense<1> : tensor<2xi64>,
+    use_dynamic = false,
+    use_symmetric = true,
+    window_strides = dense<3> : tensor<2xi64>
+  } : (memref<?x?x?x?xi8, "gpu">, memref<?x?x?x?xi8, "gpu">, memref<4xi32, "cpu">, memref<f32, "gpu">, memref<i32, "gpu">, memref<f32, "gpu">, memref<i32, "gpu">, memref<f32, "gpu">, memref<i32, "gpu">, memref<?x?x?x?xi8, "gpu">) -> ()
+  return
+}
+
+// -----
+
+// CHECK-LABEL: quantized_dot_general
+func.func @quantized_dot_general(%arg0: !disc_ral.context) {
+  %c0 = arith.constant 0 : index
+  %0 = "disc_ral.recv_input"(%arg0, %c0) : (!disc_ral.context, index) -> memref<?x?x?x?xi8, "gpu">
+  %c1 = arith.constant 1 : index
+  %1 = "disc_ral.recv_input"(%arg0, %c1) : (!disc_ral.context, index) -> memref<?x?x?x?xi8, "gpu">
+  %c2 = arith.constant 2 : index
+  %2 = "disc_ral.recv_input"(%arg0, %c2) : (!disc_ral.context, index) -> memref<f32, "gpu">
+  %c3 = arith.constant 3 : index
+  %3 = "disc_ral.recv_input"(%arg0, %c3) : (!disc_ral.context, index) -> memref<i32, "gpu">
+  %c4 = arith.constant 4 : index
+  %4 = "disc_ral.recv_input"(%arg0, %c4) : (!disc_ral.context, index) -> memref<f32, "gpu">
+  %c5 = arith.constant 5 : index
+  %5 = "disc_ral.recv_input"(%arg0, %c5) : (!disc_ral.context, index) -> memref<i32, "gpu">
+  %c6 = arith.constant 6 : index
+  %6 = "disc_ral.recv_input"(%arg0, %c6) : (!disc_ral.context, index) -> memref<f32, "gpu">
+  %c7 = arith.constant 7 : index
+  %7 = "disc_ral.recv_input"(%arg0, %c7) : (!disc_ral.context, index) -> memref<i32, "gpu">
+  %c8 = arith.constant 8 : index
+  %8 = "disc_ral.recv_input"(%arg0, %c8) : (!disc_ral.context, index) -> memref<?x?x?x?xi8, "gpu">
+  // CHECK: %[[DEFAULT_STREAM:.*]] = llvm.inttoptr {{.*}} : i32 to !llvm.ptr<i8>
+  // CHECK: disc_ral.dispatch
+  // CHECK-SAME: backend_config = ""
+  // CHECK-SAME: call_target_name = "ral_qgemm"
+  // CHECK-SAME: device = "gpu"
+  "lmhlo_disc.quantized_dot_general"(%0, %1, %2, %3, %4, %5, %6, %7, %8) {
+    axis = dense<> : tensor<0xi64>,
+    use_dynamic = false,
+    use_symmetric = true,
+    dot_dimension_numbers = #mhlo.dot<
+      lhs_batching_dimensions = [0, 1],
+      rhs_batching_dimensions = [0, 1],
+      lhs_contracting_dimensions = [3],
+      rhs_contracting_dimensions = [3]
+    >
+  } : (memref<?x?x?x?xi8, "gpu">, memref<?x?x?x?xi8, "gpu">, memref<f32, "gpu">, memref<i32, "gpu">, memref<f32, "gpu">, memref<i32, "gpu">, memref<f32, "gpu">, memref<i32, "gpu">, memref<?x?x?x?xi8, "gpu">) -> ()
   return
 }

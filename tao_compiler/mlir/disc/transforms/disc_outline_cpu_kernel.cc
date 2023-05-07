@@ -16,14 +16,14 @@ limitations under the License.
 // This file implements the logic to outline each cpu kernel (represented as a
 // parallelOp) to a dedicated function.
 
+#include "lhlo/IR/lhlo_ops.h"
 #include "llvm/Support/Debug.h"
-#include "mlir-hlo/Dialect/lhlo/IR/lhlo_ops.h"
 #include "mlir/Dialect/Affine/LoopUtils.h"
-#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
-#include "mlir/IR/BlockAndValueMapping.h"
+#include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Location.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/SymbolTable.h"
@@ -31,11 +31,11 @@ limitations under the License.
 #include "mlir/Transforms/LoopInvariantCodeMotionUtils.h"
 #include "mlir/Transforms/Passes.h"
 #include "mlir/Transforms/RegionUtils.h"
-#include "tensorflow/compiler/mlir/disc/IR/disc_ral_ops.h"
-#include "tensorflow/compiler/mlir/disc/transforms/PassDetail.h"
-#include "tensorflow/compiler/mlir/disc/transforms/codegen_utils.h"
-#include "tensorflow/compiler/mlir/disc/transforms/fusion_utils.h"
-#include "tensorflow/compiler/mlir/disc/transforms/placement_utils.h"
+#include "mlir/disc/IR/disc_ral_ops.h"
+#include "mlir/disc/transforms/PassDetail.h"
+#include "mlir/disc/transforms/codegen_utils.h"
+#include "mlir/disc/transforms/fusion_utils.h"
+#include "mlir/disc/transforms/placement_utils.h"
 
 namespace mlir {
 namespace disc_ral {
@@ -102,7 +102,7 @@ LogicalResult sinkOperationsIntoLaunchOp(Region& launchOpBody) {
   }
 
   // Insert operations so that the defs get cloned before uses.
-  BlockAndValueMapping map;
+  IRMapping map;
   OpBuilder builder(launchOpBody);
   for (Operation* op : toBeSunk) {
     Operation* clonedOp = builder.clone(*op, map);
@@ -140,7 +140,7 @@ static func::FuncOp outlineKernelFuncImpl(Operation* launchOp,
   auto outlinedFunc = builder.create<func::FuncOp>(loc, kernelFnName, type);
   outlinedFunc->setAttr(kCpuKernelFunc, builder.getUnitAttr());
 
-  BlockAndValueMapping map;
+  IRMapping map;
 
   // Map arguments from launch region to the arguments of the func
   // operation.
@@ -221,33 +221,38 @@ static void convertToLaunchFuncOp(Operation* launchOp, func::FuncOp kernelFunc,
   launchOp->erase();
 }
 
+/// Checks whether the given op can be hoisted by checking that
+/// - the op and none of its contained operations depend on values inside of the
+///   loop (by means of calling definedOutside).
+/// - the op is not terminator.
+bool canBeHoisted(Operation* op,
+                  llvm::function_ref<bool(Value)> definedOutside) {
+  // Do not move terminators.
+  if (op->hasTrait<OpTrait::IsTerminator>()) return false;
+
+  // Walk the nested operations and check that all used values are either
+  // defined outside of the loop or in a nested region, but not at the level of
+  // the loop body.
+  auto walkFn = [&](Operation* child) {
+    for (Value operand : child->getOperands()) {
+      // Ignore values defined in a nested region.
+      if (op->isAncestor(operand.getParentRegion()->getParentOp())) continue;
+      if (!definedOutside(operand)) return WalkResult::interrupt();
+    }
+    return WalkResult::advance();
+  };
+  return !op->walk(walkFn).wasInterrupted();
+}
+
 LogicalResult cloneAndMoveTo(OpBuilder& b, scf::ParallelOp parallelOp,
                              ValueRange lower, ValueRange upper,
                              ValueRange step, Block* block) {
-  auto cloned = cast<scf::ParallelOp>(b.clone(*parallelOp.getOperation()));
+  scf::ParallelOp cloned =
+      cast<scf::ParallelOp>(b.clone(*parallelOp.getOperation()));
   cloned->setOperands(0, lower.size(), lower);
   cloned->setOperands(lower.size(), upper.size(), upper);
   cloned->setOperands(lower.size() + upper.size(), step.size(), step);
   cloned->moveBefore(block, block->begin());
-
-  // Move out memref.alloc/dealloc op from the loop op.
-  // They are used to manage the tile buffers. We can re-use these buffers cross
-  // iterations in the same thread.
-  SmallVector<Operation*> allocOps;
-  SmallVector<Operation*> deallocOps;
-  for (Operation& op : cloned.getLoopBody().front()) {
-    if (isa<memref::AllocOp>(&op)) {
-      allocOps.push_back(&op);
-    } else if (isa<memref::DeallocOp>(&op)) {
-      deallocOps.push_back(&op);
-    }
-  }
-  for (Operation* op : allocOps) {
-    op->moveBefore(cloned);
-  }
-  for (Operation* op : llvm::reverse(deallocOps)) {
-    op->moveAfter(cloned);
-  }
 
   if (cloned
           .walk([&](LoopLikeOpInterface loopLike) {
@@ -258,7 +263,35 @@ LogicalResult cloneAndMoveTo(OpBuilder& b, scf::ParallelOp parallelOp,
     return failure();
   }
 
-  moveLoopInvariantCode(cloned);
+  // Move out memref.alloc/dealloc op from the loop op.
+  // They are used to manage the tile buffers. We can re-use these buffers cross
+  // iterations in the same thread.
+  auto definedOutside = [&](Value value) {
+    auto loopLike = dyn_cast<LoopLikeOpInterface>(cloned.getOperation());
+    assert(loopLike);
+    return loopLike.isDefinedOutsideOfLoop(value);
+  };
+
+  struct AllocDeallocPair {
+    memref::AllocOp allocOp;
+    memref::DeallocOp deallocOp;
+  };
+  DenseMap<Value, AllocDeallocPair> allocAndDeallocPairs;
+  for (Operation& op : cloned.getLoopBody().front()) {
+    if (auto allocOp = dyn_cast<memref::AllocOp>(&op)) {
+      if (canBeHoisted(&op, definedOutside))
+        allocAndDeallocPairs[op.getResult(0)].allocOp = allocOp;
+    } else if (auto deallocOp = dyn_cast<memref::DeallocOp>(&op)) {
+      auto it = allocAndDeallocPairs.find(op.getOperand(0));
+      if (it != allocAndDeallocPairs.end()) it->second.deallocOp = deallocOp;
+    }
+  }
+  for (auto& pair : allocAndDeallocPairs) {
+    if (!pair.second.allocOp || !pair.second.deallocOp) continue;
+    pair.second.allocOp->moveBefore(cloned);
+    pair.second.deallocOp->moveAfter(cloned);
+  }
+
   return success();
 }
 

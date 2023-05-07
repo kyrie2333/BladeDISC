@@ -25,9 +25,10 @@ limitations under the License.
 //   of one op for different devices and different element types. For example,
 //   we may have GEMM ops with different element types.
 
+#include "lhlo/IR/lhlo_ops.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/Support/Debug.h"
-#include "mlir-hlo/Dialect/lhlo/IR/lhlo_ops.h"
-#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/Attributes.h"
@@ -36,19 +37,22 @@ limitations under the License.
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Location.h"
 #include "mlir/IR/MLIRContext.h"
+#include "mlir/IR/Matchers.h"
 #include "mlir/IR/Operation.h"
+#include "mlir/IR/PatternMatch.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
-#include "tensorflow/compiler/mlir/disc/IR/custom_call_base.h"
-#include "tensorflow/compiler/mlir/disc/IR/disc_ral_ops.h"
-#include "tensorflow/compiler/mlir/disc/IR/lhlo_disc_ops.h"
-#include "tensorflow/compiler/mlir/disc/disc_util.h"
-#include "tensorflow/compiler/mlir/disc/transforms/PassDetail.h"
-#include "tensorflow/compiler/mlir/disc/transforms/codegen_utils.h"
-#include "tensorflow/compiler/mlir/disc/transforms/fusion_utils.h"
-#include "tensorflow/compiler/mlir/disc/transforms/placement_utils.h"
-#include "tensorflow/compiler/mlir/disc/transforms/rewriters.h"
+#include "mlir/disc/IR/custom_call_base.h"
+#include "mlir/disc/IR/disc_ral_ops.h"
+#include "mlir/disc/IR/lhlo_disc_ops.h"
+#include "mlir/disc/disc_util.h"
+#include "mlir/disc/transforms/PassDetail.h"
+#include "mlir/disc/transforms/codegen_utils.h"
+#include "mlir/disc/transforms/fusion_utils.h"
+#include "mlir/disc/transforms/placement_utils.h"
+#include "mlir/disc/transforms/rewriters.h"
 
+#define DEBUG_TYPE "disc_lower_to_library_call.cc"
 namespace mlir {
 namespace disc_ral {
 
@@ -63,8 +67,11 @@ using lmhlo::FusionOp;
 using lmhlo::LmhloOp;
 using lmhlo::ReshapeOp;
 using lmhlo_disc::CustomCallOp;
+using lmhlo_disc::CustomCallV2Op;
 using lmhlo_disc::D2HOp;
 using lmhlo_disc::H2DOp;
+using lmhlo_disc::QuantizedDotGeneralOp;
+using lmhlo_disc::QuantizedDynamicConvOp;
 
 // Suppose that the first argument of the function is the ctx value
 Value GetContextValueFromFunctionArguments(Operation* op) {
@@ -98,11 +105,17 @@ void InsertSyncOnStream(Operation* op, Value ctx, Value stream_handle,
                               "sync_on_stream", false, "gpu");
 }
 
+// return true if op in fusion block
+bool isInFusionBlock(Operation* op) {
+  if (op->getParentOfType<FusionOp>() != nullptr) return true;
+  return false;
+}
+
 // Converting:
 //   %output = disc_ral.recv_input(ctx, input_idx)
 //     to
 //   %output = disc_ral.dispatch(ctx, input_idx) {call_target_name =
-//   "ral_recv_input", backend_config = "cpu"}
+//   "ral_recv_input", device = "cpu"}
 struct RecvInputOpConvertor : public OpRewritePattern<RecvInputOp> {
   using OpRewritePattern<RecvInputOp>::OpRewritePattern;
 
@@ -120,7 +133,7 @@ struct RecvInputOpConvertor : public OpRewritePattern<RecvInputOp> {
 //   disc_ral.send_output(ctx, output_idx, output)
 //     to
 //   disc_ral.dispatch(ctx, output_idx, output) {call_target_name =
-//   "ral_send_output", backend_config = "cpu"}
+//   "ral_send_output", device = "cpu"}
 struct SendOutputOpConvertor : public OpRewritePattern<SendOutputOp> {
   using OpRewritePattern<SendOutputOp>::OpRewritePattern;
 
@@ -141,9 +154,9 @@ struct SendOutputOpConvertor : public OpRewritePattern<SendOutputOp> {
 //   stream_value = getDefaultGpuStream()
 //   newOperands = {stream_value, operands...};
 //   disc_ral.dispatch(ctx, newOperands) {call_target_name =
-//     "xxx", backend_config = "gpu"}
+//     "xxx", device = "gpu"}
 //   disc_ral.dispatch(ctx, stream_value) {call_target_name =
-//     "sync_on_stream", backend_config = "gpu"}
+//     "sync_on_stream", device = "gpu"}
 template <typename OpTy>
 struct GpuCopyOpConvertor : public OpRewritePattern<OpTy> {
   GpuCopyOpConvertor(MLIRContext* context, StringRef target)
@@ -153,6 +166,8 @@ struct GpuCopyOpConvertor : public OpRewritePattern<OpTy> {
 
   LogicalResult matchAndRewrite(OpTy op,
                                 PatternRewriter& rewriter) const override {
+    if (isInFusionBlock(op)) return failure();
+
     Value ctx = GetContextValueFromFunctionArguments(op);
     if (!ctx) {
       return op->emitOpError(
@@ -178,10 +193,14 @@ struct GpuCopyOpConvertor : public OpRewritePattern<OpTy> {
   StringRef target_;
 };
 
-struct DotGeneralOpConvertor : public OpRewritePattern<DotGeneralOp> {
-  using OpRewritePattern<DotGeneralOp>::OpRewritePattern;
+template <typename OpTy>
+struct DotGeneralLikeConverter : public OpRewritePattern<OpTy> {
+  DotGeneralLikeConverter(MLIRContext* context, StringRef target)
+      : OpRewritePattern<OpTy>::OpRewritePattern(context) {
+    this->target_ = target;
+  }
 
-  LogicalResult matchAndRewrite(DotGeneralOp op,
+  LogicalResult matchAndRewrite(OpTy op,
                                 PatternRewriter& rewriter) const override {
     Value ctx = GetContextValueFromFunctionArguments(op);
     if (!ctx) {
@@ -203,7 +222,7 @@ struct DotGeneralOpConvertor : public OpRewritePattern<DotGeneralOp> {
       return op.emitOpError() << "unmatched batch dims size.";
     }
 
-    int rank = op.getOperand(0).getType().cast<MemRefType>().getRank();
+    int rank = op.getOperand(0).getType().template cast<MemRefType>().getRank();
     for (auto&& z : llvm::zip(lhs_batching_dims, rhs_batching_dims)) {
       if ((std::get<0>(z) >= rank - 2) || (std::get<1>(z) >= rank - 2)) {
         return op.emitOpError() << "unsupported batch dims.";
@@ -241,11 +260,14 @@ struct DotGeneralOpConvertor : public OpRewritePattern<DotGeneralOp> {
 
     bool on_gpu = placement_utils::isGpuMemRef(op->getOperand(2));
     rewriter.replaceOpWithNewOp<DispatchOp>(op, llvm::None, ctx, newOperands,
-                                            "ral_gemm", false,
+                                            target_, false,
                                             on_gpu ? "gpu" : "cpu");
 
     return success();
   }
+
+ private:
+  StringRef target_;
 };
 
 template <typename OpTy>
@@ -262,7 +284,11 @@ Value GetConvMetadata(OpTy op, PatternRewriter& rewriter) {
   //   - weight_is_const : indicate whether the weight is const.
   Location loc = op.getLoc();
   Type field_type = rewriter.getI32Type();
-  int rank = op.getOutput().getType().template dyn_cast<ShapedType>().getRank();
+  int numOperands = op->getNumOperands();
+  int rank = op->getOperand(numOperands - 1)
+                 .getType()
+                 .template dyn_cast<ShapedType>()
+                 .getRank();
   int num_spatial_dims = rank - 2;
   int num_metadata_fields = rank * 3 + (rank - 2) * 2 + 1;
   Value metadata_value = rewriter.create<memref::AllocaOp>(
@@ -364,15 +390,19 @@ struct ConvConverter : public OpRewritePattern<ConvolutionOp> {
   }
 };
 
-struct DynamicConvConverter : public OpRewritePattern<DynamicConvOp> {
-  using OpRewritePattern<DynamicConvOp>::OpRewritePattern;
+template <typename OpTy>
+struct DynamicConvLikeConverter : public OpRewritePattern<OpTy> {
+  DynamicConvLikeConverter(MLIRContext* context, StringRef target)
+      : OpRewritePattern<OpTy>::OpRewritePattern(context) {
+    this->target_ = target;
+  }
 
-  LogicalResult matchAndRewrite(DynamicConvOp op,
+  LogicalResult matchAndRewrite(OpTy op,
                                 PatternRewriter& rewriter) const override {
     Value ctx = GetContextValueFromFunctionArguments(op);
     if (!ctx) {
-      op->emitOpError()
-          << "the first argument of the function is not ral context type.";
+      return op->emitOpError()
+             << "the first argument of the function is not ral context type.";
     }
     Value stream_handle = GetDefaultStreamHandle(op, rewriter);
     SmallVector<Value, 4> newOperands{stream_handle};
@@ -384,19 +414,22 @@ struct DynamicConvConverter : public OpRewritePattern<DynamicConvOp> {
     // input & kernel & output layouts, strides and dilation
     newOperands.push_back(GetConvMetadata(op, rewriter));
 
-    bool on_gpu = placement_utils::isGpuMemRef(op->getOperand(3));
+    bool on_gpu = placement_utils::isGpuMemRef(op->getOperand(0));
     rewriter.replaceOpWithNewOp<DispatchOp>(op, llvm::None, ctx, newOperands,
-                                            "ral_conv", false,
+                                            target_, false,
                                             on_gpu ? "gpu" : "cpu");
     return success();
   }
+
+ private:
+  StringRef target_;
 };
 
 // Return null is not a copy-removable copy-like ops, otherwise return
 // the copied result value.
 Value getCopyRemovableResult(Operation* op) {
   // Not removable if inside a fusion.
-  if (op->getParentOfType<FusionOp>() != nullptr) return {};
+  if (isInFusionBlock(op)) return {};
 
   // TODO(disc): add cpu copy removal support.
   if (isa<ReshapeOp, DynamicReshapeOp, CopyOp>(op)) {
@@ -443,6 +476,60 @@ Value getRootMemRefIfSafe(Value memref) {
   return rootMemRef;
 }
 
+struct TransposeConverter : public OpRewritePattern<lmhlo::TransposeOp> {
+  using OpRewritePattern<lmhlo::TransposeOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(lmhlo::TransposeOp op,
+                                PatternRewriter& rewriter) const override {
+    auto permutation = op.getPermutation().getValues<int64_t>();
+    int rank = permutation.size();
+    if (rank != 2 && rank != 3) return failure();
+    // only rewriter custom library when switch 1 and 2 dimensions of
+    // a 3d tensor, that means permute = [0, 2, 1]
+    if (rank == 3 && permutation[1] != 2 && permutation[2] != 1)
+      return failure();
+    bool on_gpu = placement_utils::isGpuMemRef(op->getOperand(0));
+    // TODO: support other device
+    if (!on_gpu) return failure();
+    Location loc = op.getLoc();
+
+    Value ctx = GetContextValueFromFunctionArguments(op);
+    if (!ctx) {
+      return op->emitOpError()
+             << "the first argument of the function is not ral context type.";
+    }
+    Value stream_handle = GetDefaultStreamHandle(op, rewriter);
+
+    SmallVector<Value, 5> newOperands{stream_handle};
+
+    // input
+    newOperands.push_back(op->getOperand(0));
+
+    // permute value
+    Type permute_type = rewriter.getI32Type();
+    Value permute_value = rewriter.create<memref::AllocOp>(
+        loc, MemRefType::get(
+                 {rank}, rewriter.getI32Type(), MemRefLayoutAttrInterface(),
+                 StringAttr::get(op->getContext(), placement_utils::kCpu)));
+
+    for (auto&& en : llvm::enumerate(permutation)) {
+      Value value =
+          rewriter.create<arith::ConstantIntOp>(loc, en.value(), permute_type);
+      Value offset = rewriter.create<arith::ConstantIndexOp>(loc, en.index());
+      SmallVector<Value, 1> ivs(1, offset);
+      rewriter.create<memref::StoreOp>(loc, value, permute_value, ivs);
+    }
+    newOperands.push_back(permute_value);
+
+    // output
+    newOperands.push_back(op->getOperand(1));
+
+    rewriter.replaceOpWithNewOp<DispatchOp>(op, llvm::None, ctx, newOperands,
+                                            "ral_transpose", false, "gpu");
+    return success();
+  }
+};
+
 // Converting:
 //  lmhlo.xxxOp(%from, %to)
 //    to
@@ -451,7 +538,7 @@ Value getRootMemRefIfSafe(Value memref) {
 //  %target_shape = shape_of(%to)
 //  newOperands = {stream_value, %from, %target_shape}
 //  %newTo = disc_ral.dispatch(ctx, newOperands) {call_target_name =
-//     "inc_ref", backend_config = "gpu"}
+//     "inc_ref", device = "gpu"}
 //  replace not shape-only users of %to using %newTo
 template <typename OpTy>
 struct CopyLikeOpConvertor : public OpRewritePattern<OpTy> {
@@ -575,7 +662,7 @@ struct CustomCallOpConvertor : public OpRewritePattern<CustomCallOp> {
     }
     Value stream_handle = GetDefaultStreamHandle(op, rewriter);
 
-    StringRef target_name = op.call_target_name();
+    StringRef target_name = op.getCallTargetName();
     auto lower_func =
         mhlo_disc::CustomCallRegistry::Global().FindLowerToLibraryCallFunc(
             target_name.str());
@@ -588,10 +675,215 @@ struct CustomCallOpConvertor : public OpRewritePattern<CustomCallOp> {
   }
 };
 
+using StrT = SmallString<128>;
+
+template <typename T>
+LogicalResult emitPOD(T value, StrT& out) {
+  auto data = (const char*)(&value);
+  out.append(StringRef(data, sizeof(value)));
+  return success();
+}
+
+LogicalResult emitBytes(StringRef bytes, StrT& out) {
+  out.append(bytes);
+  return success();
+}
+
+LogicalResult emitString(StringRef str, StrT& out) {
+  if (failed(emitPOD<int64_t>(str.size(), out))) return failure();
+  return emitBytes(str, out);
+}
+
+// forward decalaration
+LogicalResult emitAttr(Attribute attr, StrT& out);
+
+LogicalResult emitDictAttr(DictionaryAttr dict, StrT& out) {
+  // 1, firstly emit the type string
+  if (failed(emitString("dict", out))) return failure();
+
+  // 2, emit the number of entries
+  if (failed(emitPOD<int64_t>(dict.size(), out))) return failure();
+
+  // 3, emit <key, value> pairs
+  for (const auto& namedAttr : dict) {
+    // emit the key of entry
+    if (failed(emitString(namedAttr.getName().getValue(), out)))
+      return failure();
+    // emit the value of entry
+    if (failed(emitAttr(namedAttr.getValue(), out))) return failure();
+  }
+  return success();
+}
+
+LogicalResult emitStrAttr(StringAttr str, StrT& out) {
+  // 1, firstly emit the type string
+  if (failed(emitString("str", out))) return failure();
+
+  // 2, emit the value.
+  return emitString(str.getValue(), out);
+}
+
+LogicalResult emitBoolAttr(BoolAttr flag, StrT& out) {
+  // 1, firstly emit the type string
+  if (failed(emitString("bool", out))) return failure();
+
+  // 2, emit the value.
+  return emitPOD(flag.getValue(), out);
+}
+
+LogicalResult emitIntegerAttr(IntegerAttr val, StrT& out) {
+  // 1, firstly emit the type string
+  if (failed(emitString("int", out))) return failure();
+
+  // 2, emit the value.
+  return emitPOD(val.getInt(), out);
+}
+
+LogicalResult emitFloatAttr(FloatAttr val, StrT& out) {
+  // 1, firstly emit the type string
+  if (failed(emitString("float", out))) return failure();
+
+  // 2, emit the value.
+  return emitPOD(val.getValueAsDouble(), out);
+}
+
+LogicalResult emitDenseElementsAttr(DenseElementsAttr val, StrT& out) {
+  // 1, firstly emit the type string
+  if (failed(emitString("denseElementsAttr", out))) return failure();
+
+  // Convert i1 -> i8
+  auto ty = val.getType();
+  auto elemTy = ty.getElementType();
+  if (!elemTy.isIntOrIndexOrFloat()) return failure();
+  if (elemTy.getIntOrFloatBitWidth() == 1) {
+    using FuncType = mlir::APInt(const llvm::APInt&);
+    val = val.mapValues(
+        IntegerType::get(val.getContext(), 8),
+        llvm::function_ref<FuncType>([](const llvm::APInt& intVal) {
+          return llvm::APInt(8, intVal.getZExtValue());
+        }));
+    ty = val.getType();
+    elemTy = ty.getElementType();
+  }
+
+  // 2.1, emit element type
+  // Early returns for unsupported type.
+  if (elemTy.isIntOrIndex()) {
+    if (failed(emitString(elemTy.isUnsignedInteger() ? "uint" : "int", out)))
+      return failure();
+  } else {
+    if (failed(emitString("float", out))) return failure();
+  }
+  if (failed(emitPOD<unsigned>(elemTy.getIntOrFloatBitWidth(), out)))
+    return failure();
+  // 2.2, emit rank
+  if (failed(emitPOD<int64_t>(ty.getRank(), out))) return failure();
+  // 2.3, emit shape
+  for (int64_t v : ty.getShape())
+    if (failed(emitPOD<int64_t>(v, out))) return failure();
+
+  // 3, emit isSplat?
+  if (failed(emitPOD<bool>(val.isSplat(), out))) return failure();
+
+  // 4, emit raw data
+  StringRef rawData(val.getRawData().data(), val.getRawData().size());
+  return emitString(rawData, out);
+}
+
+LogicalResult emitArrayAttr(ArrayAttr arr, StrT& out) {
+  if (llvm::all_of(arr, [](Attribute val) {
+        if (!isa<IntegerAttr>(val)) return false;
+        auto ty = cast<IntegerAttr>(val).getType();
+        return isa<IntegerType>(ty) && ty.getIntOrFloatBitWidth() == 64;
+      })) {
+    // 1, firstly emit the type string
+    if (failed(emitString("intArray", out))) return failure();
+
+    // 2, emit the size of array
+    if (failed(emitPOD<int64_t>(arr.size(), out))) return failure();
+
+    // 3, emit the value of array
+    for (const auto& val : arr) {
+      if (failed(emitPOD(cast<IntegerAttr>(val).getInt(), out)))
+        return failure();
+    }
+    return success();
+  }
+  // 1, firstly emit the type string
+  if (failed(emitString("array", out))) return failure();
+
+  // 2, emit the size of array
+  if (failed(emitPOD<int64_t>(arr.size(), out))) return failure();
+
+  // 3, emit the value of array
+  for (const auto& val : arr) {
+    if (failed(emitAttr(val, out))) return failure();
+  }
+  return success();
+}
+
+LogicalResult emitAttr(Attribute attr, StrT& out) {
+  if (auto dictAttr = dyn_cast<DictionaryAttr>(attr)) {
+    return emitDictAttr(dictAttr, out);
+  } else if (auto strAttr = dyn_cast<StringAttr>(attr)) {
+    return emitStrAttr(strAttr, out);
+  } else if (auto boolAttr = dyn_cast<BoolAttr>(attr)) {
+    return emitBoolAttr(boolAttr, out);
+  } else if (auto intAttr = dyn_cast<IntegerAttr>(attr)) {
+    return emitIntegerAttr(intAttr, out);
+  } else if (auto floatAttr = dyn_cast<FloatAttr>(attr)) {
+    return emitFloatAttr(floatAttr, out);
+  } else if (auto denseAttr = dyn_cast<DenseElementsAttr>(attr)) {
+    return emitDenseElementsAttr(denseAttr, out);
+  } else if (auto arrayAttr = dyn_cast<ArrayAttr>(attr)) {
+    return emitArrayAttr(arrayAttr, out);
+  }
+  return failure();
+}
+
+struct CustomCallV2OpConvertor : public OpRewritePattern<CustomCallV2Op> {
+  CustomCallV2OpConvertor(MLIRContext* context, bool gpuEnabled)
+      : OpRewritePattern<CustomCallV2Op>::OpRewritePattern(context) {
+    this->gpuEnabled_ = gpuEnabled;
+  }
+
+  LogicalResult matchAndRewrite(CustomCallV2Op op,
+                                PatternRewriter& rewriter) const override {
+    Value ctx = GetContextValueFromFunctionArguments(op);
+    if (!ctx) {
+      return op.emitOpError()
+             << "the first argument of the function is not ral context type";
+    }
+
+    StrT customAttrBuffer;
+    if (failed(emitAttr(op.getCustomAttrs(), customAttrBuffer))) {
+      return op.emitOpError()
+             << "fail to lower the custom_attrs of the custom call op.\n";
+    }
+
+    Value streamHandle = GetDefaultStreamHandle(op, rewriter);
+    SmallVector<Value> newOperands{streamHandle};
+    for (Value operand : op->getOperands()) newOperands.push_back(operand);
+
+    bool onGpu =
+        (op.getDevice() == "d" || op.getDevice() == "x" && this->gpuEnabled_);
+    rewriter.replaceOpWithNewOp<DispatchOp>(
+        op, op->getResultTypes(), ctx, newOperands, op.getCallTargetName(),
+        false, onGpu ? "gpu" : "cpu", customAttrBuffer);
+    return success();
+  }
+
+ private:
+  bool gpuEnabled_;
+};
+
 struct DiscLowerToLibraryCallPass
     : public DiscLowerToLibraryCallPassBase<DiscLowerToLibraryCallPass> {
-  using DiscLowerToLibraryCallPassBase<
-      DiscLowerToLibraryCallPass>::DiscLowerToLibraryCallPassBase;
+  DiscLowerToLibraryCallPass(bool gpu_enabled)
+      : DiscLowerToLibraryCallPassBase<
+            DiscLowerToLibraryCallPass>::DiscLowerToLibraryCallPassBase() {
+    this->gpu_enabled_ = gpu_enabled;
+  }
 
   void getDependentDialects(DialectRegistry& registry) const override {
     registry.insert<LLVM::LLVMDialect>();
@@ -599,6 +891,10 @@ struct DiscLowerToLibraryCallPass
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
+    // skip kdot fusion func.
+    if (func->getAttrOfType<StringAttr>(kFuncCompIntensFusionAttr)) {
+      return;
+    }
     MLIRContext* context = &getContext();
     RewritePatternSet patterns(context);
     // clang-format off
@@ -607,17 +903,27 @@ struct DiscLowerToLibraryCallPass
       CopyLikeOpConvertor<DynamicReshapeOp>,
       CopyLikeOpConvertor<ReshapeOp>,
       CustomCallOpConvertor,
-      DotGeneralOpConvertor,
       RecvInputOpConvertor,
       ConvConverter,
-      DynamicConvConverter,
       SendOutputOpConvertor
     >(context);
     // clang-format on
+    if (enableTransposeLibraryCall())
+      patterns.insert<TransposeConverter>(context);
 
     // GPU copy related ops
     patterns.insert<GpuCopyOpConvertor<H2DOp>>(context, "h2d");
     patterns.insert<GpuCopyOpConvertor<D2HOp>>(context, "d2h");
+    patterns.insert<DynamicConvLikeConverter<DynamicConvOp>>(context,
+                                                             "ral_conv");
+    patterns.insert<DynamicConvLikeConverter<QuantizedDynamicConvOp>>(
+        context, "ral_qconv");
+    patterns.insert<DotGeneralLikeConverter<DotGeneralOp>>(context, "ral_gemm");
+    patterns.insert<DotGeneralLikeConverter<QuantizedDotGeneralOp>>(
+        context, "ral_qgemm");
+
+    // custom call related
+    patterns.insert<CustomCallV2OpConvertor>(context, gpu_enabled_);
 
     if (failed(applyPatternsAndFoldGreedily(func, std::move(patterns)))) {
       func.emitError("applyPatternsAndFoldGreedily does not converge");
@@ -628,9 +934,9 @@ struct DiscLowerToLibraryCallPass
 
 }  // namespace
 
-std::unique_ptr<OperationPass<func::FuncOp>>
-createDiscLowerToLibraryCallPass() {
-  return std::make_unique<DiscLowerToLibraryCallPass>();
+std::unique_ptr<OperationPass<func::FuncOp>> createDiscLowerToLibraryCallPass(
+    bool gpu_enabled) {
+  return std::make_unique<DiscLowerToLibraryCallPass>(gpu_enabled);
 }
 
 }  // namespace disc_ral

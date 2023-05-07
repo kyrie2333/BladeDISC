@@ -9,22 +9,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "tensorflow/compiler/mlir/xla/ral/context/stream_executor_based_impl.h"
+#include "mlir/xla/ral/context/stream_executor_based_impl.h"
+
+#include <dlfcn.h>
 
 #include <functional>
 #include <iostream>
 
 #include "absl/types/optional.h"
-#include "tensorflow/compiler/mlir/xla/ral/context/common_context_impl.h"
-#include "tensorflow/compiler/mlir/xla/ral/context/context_util.h"
-#include "tensorflow/compiler/mlir/xla/ral/device/gpu/gpu_driver.h"
-#include "tensorflow/compiler/mlir/xla/ral/ral_base.h"
-#include "tensorflow/compiler/mlir/xla/ral/ral_helper.h"
-#include "tensorflow/compiler/mlir/xla/ral/ral_logging.h"
+#include "mlir/xla/ral/context/common_context_impl.h"
+#include "mlir/xla/ral/context/context_util.h"
+#include "mlir/xla/ral/context/pdll_util.h"
+#include "mlir/xla/ral/device/gpu/gpu_driver.h"
+#include "mlir/xla/ral/ral_base.h"
+#include "mlir/xla/ral/ral_helper.h"
+#include "mlir/xla/ral/ral_logging.h"
 #include "tensorflow/core/public/version.h"
 #include "tensorflow/core/util/env_var.h"
-#if defined(PLATFORM_ALIBABA) and defined(ENABLE_BLADE_GEMM)
-#include "bladnn/bladnn.h"
+
+#if TF_MAJOR_VERSION < 2 || (TF_MAJOR_VERSION == 2 && TF_MINOR_VERSION <= 8)
+#define TF_LE_2_8
+#endif
+
+#if defined(TF_1_12) || defined(TF_1_14) || defined(TF_LE_2_8)
+namespace tsl {
+template <typename T>
+using StatusOr = ::stream_executor::port::StatusOr<T>;
+using Status = ::stream_executor::port::Status;
+}  // namespace tsl
+
+namespace {
+tsl::Status OkStatus() { return ::stream_executor::port::Status::OK(); }
+}  // namespace
+#else
+#include "tensorflow/tsl/platform/status.h"
+#include "tensorflow/tsl/platform/statusor.h"
 #endif
 
 #ifdef TAO_RAL_USE_STREAM_EXECUTOR
@@ -199,7 +218,14 @@ static bool DoGemmWithAlgorithm(
             /*leading dim of LHS=*/lhs_matrix.num_cols,
             /*beta=*/static_cast<OutT>(beta), &output_data,
             /*leading dim of output=*/n, computation_type, *algorithm,
+#if (TF_MAJOR_VERSION == 2 && TF_MINOR_VERSION > 8) && TENSORFLOW_USE_ROCM && \
+    (!TENSORFLOW_USE_DCU)
+            output_profile_result, se::blas::CallContext::kNone)
+#elif (TF_MAJOR_VERSION == 2 && TF_MINOR_VERSION >= 11)
+            se::blas::kDefaultComputePrecision, output_profile_result)
+#else
             output_profile_result)
+#endif
         .ok();
   }
 
@@ -215,7 +241,15 @@ static bool DoGemmWithAlgorithm(
             /*leading dim of RHS=*/rhs_matrix.num_cols, rhs_stride, lhs_data,
             /*leading dim of LHS=*/lhs_matrix.num_cols, lhs_stride,
             /*beta=*/static_cast<AlphaBeta>(beta), &output_data,
-            /*leading dim of output=*/n, output_stride, batch_size)
+            /*leading dim of output=*/n, output_stride,
+#if (TF_MAJOR_VERSION == 2 && TF_MINOR_VERSION > 8) && TENSORFLOW_USE_ROCM && \
+    (!TENSORFLOW_USE_DCU)
+            batch_size, se::blas::CallContext::kNone)
+#elif (TF_MAJOR_VERSION == 2 && TF_MINOR_VERSION >= 11)
+            batch_size, se::blas::kDefaultComputePrecision)
+#else
+            batch_size)
+#endif
         .ok();
   }
 
@@ -226,7 +260,12 @@ static bool DoGemmWithAlgorithm(
                      /*leading dim of RHS=*/rhs_matrix.num_cols, lhs_data,
                      /*leading dim of LHS=*/lhs_matrix.num_cols,
                      /*beta=*/static_cast<AlphaBeta>(beta), &output_data,
+#if (TF_MAJOR_VERSION == 2 && TF_MINOR_VERSION > 8) && TENSORFLOW_USE_ROCM && \
+    (!TENSORFLOW_USE_DCU)
+                     /*leading dim of output=*/n, se::blas::CallContext::kNone)
+#else
                      /*leading dim of output=*/n)
+#endif
       .ok();
 }
 
@@ -274,21 +313,11 @@ struct RalGemmState : public Context::Resource {
   std::map<GemmTuningCacheKey, se::blas::AlgorithmType> gemm_tuning_cache;
 };
 
-#if defined(PLATFORM_ALIBABA) and defined(ENABLE_BLADE_GEMM)
-template <typename T>
-bladnn::Dtype toBlaDNNDtype() {
-  if (std::is_same<T, Eigen::half>::value) {
-    return bladnn::Dtype::kF16;
-  }
-  if (std::is_same<T, float>::value) {
-    return bladnn::Dtype::kF32;
-  }
-  if (std::is_same<T, double>::value) {
-    return bladnn::Dtype::kF64;
-  }
-  return bladnn::Dtype::kUnknown;
-}
-#endif
+struct RalComputeIntensiveFusionState : public Context::Resource {
+  std::mutex mu;
+  void* shared_library_handle = nullptr;
+  std::unordered_map<std::string, void*> fusion_func_map;
+};
 
 template <typename InT, typename OutT, typename E = float>
 void ral_gemm(ExecutionContext* ctx, void* stream_handle, MemRefType<InT, 2> A,
@@ -381,6 +410,121 @@ void ral_gemm(ExecutionContext* ctx, void* stream_handle, MemRefType<InT, 2> A,
   if (!s) {
     TAO_VLOG(0) << "gemm fails to launch";
     ctx->signalError(Context::FAILURE, "fail to launch gemm");
+  }
+}
+
+void ral_qgemm(
+    ExecutionContext* ctx, void* stream_handle, MemRefType<int8_t, 2> input,
+    MemRefType<int8_t, 2> weight, MemRefType<float, 0> inputScales,
+    MemRefType<int32_t, 0> inputZeroPoints, MemRefType<float, 0> weightScales,
+    MemRefType<int32_t, 0> weightZeroPoints, MemRefType<float, 0> resultScales,
+    MemRefType<int32_t, 0> resultZeroPoints, MemRefType<int8_t, 2> result,
+    bool tp_a, bool tp_b, bool weight_is_const) {
+  if (isEmptyMemref(input) || isEmptyMemref(weight) || isEmptyMemref(result)) {
+    TAO_VLOG(1) << "ral_qgemm: early return for empty tensor";
+    return;
+  }
+  TAO_VLOG(0) << "tp_a: " << tp_a << " tp_b: " << tp_b;
+  TAO_VLOG(0) << "tp_a: " << tp_a << " tp_b: " << tp_b;
+  TAO_VLOG(0) << "input.sizes[0]: " << input.sizes[0]
+              << " input.sizes[1]: " << input.sizes[1];
+  TAO_VLOG(0) << "weight.sizes[0]: " << weight.sizes[0]
+              << " weight.sizes[1]: " << weight.sizes[1];
+  TAO_VLOG(0) << "result.sizes[0]: " << result.sizes[0]
+              << " result.sizes[1]: " << result.sizes[1];
+
+  auto gpu_driver = ctx->getDriver<GPUDriver>(GPUDriver::name());
+  float input_scale, weight_scale, result_scale;
+  gpu_driver->d2h(ctx, stream_handle, &inputScales.data[0], &input_scale,
+                  sizeof(float));
+  gpu_driver->d2h(ctx, stream_handle, &weightScales.data[0], &weight_scale,
+                  sizeof(float));
+  gpu_driver->d2h(ctx, stream_handle, &resultScales.data[0], &result_scale,
+                  sizeof(float));
+
+  gpu_driver->syncOnStream(ctx, stream_handle);
+
+  float kernel_scale = input_scale * weight_scale / result_scale;
+  float beta = 0.0f;
+
+#if defined(PLATFORM_ALIBABA) and defined(ENABLE_BLADE_GEMM)
+  {
+    auto gpu_driver = ctx->getDriver<GPUDriver>(GPUDriver::name());
+    auto stream =
+        static_cast<se::Stream*>(gpu_driver->asSEStream(ctx, stream_handle));
+    void* s = stream->implementation()->GpuStreamHack();
+    bladnn::Context bladnn_ctx{s};
+    bladnn::Dtype in_dtype = toBlaDNNDtype<int8_t>();
+    bladnn::Dtype out_dtype = toBlaDNNDtype<int8_t>();
+    bool ret = bladnn::gemm(
+        &bladnn_ctx, in_dtype, tp_a, input.data, input.sizes[0], input.sizes[1],
+        in_dtype, tp_b, weight.data, weight.sizes[0], weight.sizes[1],
+        out_dtype, result.data, result.sizes[0], result.sizes[1], 1, false,
+        false, &kernel_scale, &beta);
+    if (ret) {
+      return;
+    } else {
+      ctx->signalError(Context::FAILURE, "Bladnn gemm run fail.");
+    }
+  }
+#endif
+  ctx->signalError(Context::FAILURE, "Should turn on bladnn first.");
+}
+
+void ral_comp_intens_fusion(
+    ExecutionContext* ctx,
+    const char* kernel_name,  /* function name to call on host side */
+    const char* dyn_lib_path, /* lib path containing the function */
+    void* stream_handle,      /* stream */
+    void** params /* kernel params */) {
+  using func_t = bool (*)(void*, void**);
+  func_t fusion_func;
+  std::string resource_name = "tao_ral.gpu.comp_intens_fuse";
+  auto state = ctx->getOrCreateResource<RalComputeIntensiveFusionState>(
+      resource_name, []() { return new RalComputeIntensiveFusionState; });
+  {
+    std::lock_guard<std::mutex> l(state->mu);
+    void*& handle = state->shared_library_handle;
+    if (!handle) {
+      handle = dlopen(dyn_lib_path, RTLD_LAZY);
+      if (!handle) {
+        std::string msg =
+            std::string("Fail to open compiled .so file with error: ") +
+            dlerror() + ". Fail to launch compute-intensive fusion kernel " +
+            kernel_name;
+        TAO_VLOG(0) << msg;
+        ctx->signalError(Context::FAILURE, msg);
+        return;
+      }
+    }
+    void*& fusion_func_ptr = state->fusion_func_map[kernel_name];
+    if (!fusion_func_ptr) {
+      fusion_func_ptr = dlsym(handle, kernel_name);
+    }
+    if (!fusion_func_ptr) {
+      std::string msg =
+          std::string("Fail to find fusion func: ") + kernel_name + ".";
+      TAO_VLOG(0) << msg;
+      ctx->signalError(Context::FAILURE, msg);
+      return;
+    }
+
+    fusion_func = (func_t)fusion_func_ptr;
+  }
+
+  auto gpu_driver = ctx->getDriver<GPUDriver>(GPUDriver::name());
+  auto stream =
+      static_cast<se::Stream*>(gpu_driver->asSEStream(ctx, stream_handle));
+  void* s = stream->implementation()->GpuStreamHack();
+
+  // TODO: deal with context.
+  bool result = fusion_func(s, params);
+
+  if (!result) {
+    std::string msg =
+        std::string("Error to execute fusion func: ") + kernel_name + ".";
+    TAO_VLOG(0) << msg;
+    ctx->signalError(Context::FAILURE, msg);
   }
 }
 
@@ -563,7 +707,11 @@ struct CudnnConvParams {
   std::vector<int64_t> filter_shape;
   std::vector<int64_t> output_shape;
   std::vector<int64_t> metadata;
-
+#if TENSORFLOW_USE_ROCM
+  std::optional<uint64_t> workspace_size;
+#else
+  absl::optional<uint64_t> workspace_size;
+#endif
   DataLayout input_dl;
   FilterLayout filter_dl;
   DataLayout output_dl;
@@ -571,11 +719,13 @@ struct CudnnConvParams {
   int64_t algo_id;
   size_t best_result_bytes_used;
   bool tensor_ops_enabled;
+  float scale;
 
   BatchDescriptor input_descriptor;
   FilterDescriptor filter_descriptor;
   ConvolutionDescriptor convolution_descriptor;
   BatchDescriptor output_descriptor;
+  BatchDescriptor bias_descriptor;
 };
 
 #if TENSORFLOW_USE_ROCM
@@ -591,7 +741,13 @@ std::vector<ProfileResult> GetMIOpenAlgorithms(
           params.kind, se::dnn::ToDataType<T>::value, stream,
           params.input_descriptor, operand_buffers[0], params.filter_descriptor,
           operand_buffers[1], params.output_descriptor, result_buffer,
-          params.convolution_descriptor, scratch_allocator, &algorithms)) {
+          params.convolution_descriptor, scratch_allocator,
+#if (TF_MAJOR_VERSION == 2 && TF_MINOR_VERSION > 8) && TENSORFLOW_USE_ROCM && \
+    (!TENSORFLOW_USE_DCU)
+          se::dnn::CallContext::kNone, &algorithms)) {
+#else
+          &algorithms)) {
+#endif
     ctx->signalError(Context::FAILURE, "GetMIOpenAlgorithms failed.");
   }
   return algorithms;
@@ -600,12 +756,13 @@ std::vector<ProfileResult> GetMIOpenAlgorithms(
 #else
 
 std::vector<AlgorithmDesc> GetAlgorithms(ConvolutionKind kind,
+                                         se::dnn::DataType input_dtype,
                                          se::StreamExecutor* stream_exec) {
   std::vector<AlgorithmDesc> algorithms;
   bool succ = false;
 #if (TF_MAJOR_VERSION == 2 && TF_MINOR_VERSION > 6) || TF_MAJOR_VERSION > 2
   // TF2.7 and later
-  succ = stream_exec->GetConvolveAlgorithms(kind, &algorithms);
+  succ = stream_exec->GetConvolveAlgorithms(kind, input_dtype, &algorithms);
 #elif (TF_MAJOR_VERSION == 2 && TF_MINOR_VERSION > 5)
   // TF2.6
   switch (kind) {
@@ -1089,14 +1246,14 @@ class ScratchAllocator : public se::ScratchAllocator {
     return GetMemoryLimitInBytesImpl();
   }
 
-  se::port::StatusOr<se::DeviceMemory<uint8>> AllocateBytes(
+  tsl::StatusOr<se::DeviceMemory<uint8>> AllocateBytes(
       se::Stream* stream, int64 byte_size) override {
     return AllocateBytesImpl(byte_size);
   }
 #else
   int64 GetMemoryLimitInBytes() override { return GetMemoryLimitInBytesImpl(); }
 
-  se::port::StatusOr<se::DeviceMemory<uint8>> AllocateBytes(
+  tsl::StatusOr<se::DeviceMemory<uint8>> AllocateBytes(
       int64 byte_size) override {
     return AllocateBytesImpl(byte_size);
   }
@@ -1104,8 +1261,7 @@ class ScratchAllocator : public se::ScratchAllocator {
   int64 TotalAllocatedBytes() { return total_allocated_bytes_; }
 
  private:
-  se::port::StatusOr<se::DeviceMemory<uint8>> AllocateBytesImpl(
-      int64 byte_size);
+  tsl::StatusOr<se::DeviceMemory<uint8>> AllocateBytesImpl(int64 byte_size);
   // BFCAllocator is not exposed for the decoupled compiler.
   // Thus we don't have a "try allocate" mechanism in TaoBridge as in TF,
   // the host will crash once the amount of scratch memory tried to be
@@ -1123,7 +1279,7 @@ class ScratchAllocator : public se::ScratchAllocator {
   int64 total_allocated_bytes_ = 0;
 };
 
-se::port::StatusOr<se::DeviceMemory<uint8>> ScratchAllocator::AllocateBytesImpl(
+tsl::StatusOr<se::DeviceMemory<uint8>> ScratchAllocator::AllocateBytesImpl(
     int64 byte_size) {
   CHECK_GE(byte_size, 0) << "byte_size must be positive.";
   if (byte_size > GetMemoryLimitInBytesImpl()) {
@@ -1159,12 +1315,31 @@ Status RunCudnnConvolution(CudnnConvParams& params,
   auto& filter_descriptor = params.filter_descriptor;
   auto& convolution_descriptor = params.convolution_descriptor;
   auto& output_descriptor = params.output_descriptor;
+#if TENSORFLOW_USE_ROCM
+  AlgorithmConfig algorithm{AlgorithmDesc(
+      params.algo_id, params.tensor_ops_enabled, params.workspace_size)};
+#else
+#if (TF_MAJOR_VERSION == 2 && TF_MINOR_VERSION > 4) || TF_MAJOR_VERSION > 2
+  absl::optional<uint64_t> workspace_size;
+  if (!profile_result) {
+    workspace_size = params.workspace_size;
+  }
+  AlgorithmConfig algorithm{
+      AlgorithmDesc(params.algo_id, params.tensor_ops_enabled, workspace_size)};
+#else
   AlgorithmConfig algorithm{
       AlgorithmDesc(params.algo_id, params.tensor_ops_enabled)};
+#endif
+#endif
+
 #if TENSORFLOW_USE_ROCM
   if (profile_result) {
     algorithm.set_scratch_size(profile_result->scratch_size());
   } else {
+    algorithm.set_scratch_size(params.best_result_bytes_used);
+  }
+#else
+  if (!profile_result) {
     algorithm.set_scratch_size(params.best_result_bytes_used);
   }
 #endif
@@ -1188,10 +1363,23 @@ Status RunCudnnConvolution(CudnnConvParams& params,
     TAO_VLOG(0) << "\tscratch: " << scratch_allocator;
   }
 
-  Status status = Status::OK();
+  Status status = OkStatus();
+#if (TF_MAJOR_VERSION == 2 && TF_MINOR_VERSION > 8) && TENSORFLOW_USE_ROCM && \
+    (!TENSORFLOW_USE_DCU)
+  se::dnn::CallContext call_context = se::dnn::CallContext::kNone;
+#endif
+
   switch (kind) {
     case ConvolutionKind::FORWARD:
-#if (TF_MAJOR_VERSION == 2 && TF_MINOR_VERSION > 6) || TF_MAJOR_VERSION > 2
+#if (TF_MAJOR_VERSION == 2 && TF_MINOR_VERSION > 8) && TENSORFLOW_USE_ROCM && \
+    (!TENSORFLOW_USE_DCU)
+      // TF2.9 and ROCM
+      call_context = se::dnn::CallContext::kForward;
+      status = stream->ConvolveWithAlgorithm(
+          kind, input_descriptor, input_buf, filter_descriptor, filter_buf,
+          output_descriptor, output_buf, convolution_descriptor,
+          scratch_allocator, algorithm, call_context, profile_result);
+#elif (TF_MAJOR_VERSION == 2 && TF_MINOR_VERSION > 6)
       // TF2.7 and later
       status = stream->ConvolveWithAlgorithm(
           kind, input_descriptor, input_buf, filter_descriptor, filter_buf,
@@ -1221,7 +1409,92 @@ Status RunCudnnConvolution(CudnnConvParams& params,
   if (!stream->ok()) {
     return errors::Internal("Unable to launch convolution");
   }
-  return Status::OK();
+  return OkStatus();
+}
+
+// partial specialization for int8 kernel
+template <>
+Status RunCudnnConvolution<int8_t>(
+    CudnnConvParams& params, std::vector<se::DeviceMemoryBase>& operand_buffers,
+    se::DeviceMemoryBase& result_buffer,
+    se::ScratchAllocator* scratch_allocator, se::Stream* stream,
+    se::dnn::ProfileResult* profile_result) {
+  ConvolutionKind kind = params.kind;
+  DeviceMemory<int8_t> input_buf(operand_buffers[0]);
+  DeviceMemory<int8_t> filter_buf(operand_buffers[1]);
+  DeviceMemory<int8_t> output_buf(result_buffer);
+  auto& input_descriptor = params.input_descriptor;
+  auto& filter_descriptor = params.filter_descriptor;
+  auto& convolution_descriptor = params.convolution_descriptor;
+  auto& output_descriptor = params.output_descriptor;
+  AlgorithmConfig algorithm{
+      AlgorithmDesc(params.algo_id, params.tensor_ops_enabled)};
+#if TENSORFLOW_USE_ROCM
+  if (profile_result) {
+    algorithm.set_scratch_size(profile_result->scratch_size());
+  } else {
+    algorithm.set_scratch_size(params.best_result_bytes_used);
+  }
+#endif
+
+  if (TAO_VLOG_IS_ON(2)) {
+    TAO_VLOG(0) << "input ptr: " << input_buf.opaque() << "@"
+                << input_buf.size();
+    TAO_VLOG(0) << "filter_buf ptr: " << filter_buf.opaque() << "@"
+                << filter_buf.size();
+    TAO_VLOG(0) << "output_buf ptr: " << output_buf.opaque() << "@"
+                << output_buf.size();
+    TAO_VLOG(0) << "\tdescriptors:\n"
+                << "\t  input: " << params.input_descriptor.ToString() << "\n"
+                << "\t  filter: " << params.filter_descriptor.ToString() << "\n"
+                << "\t  conv: " << params.convolution_descriptor.ToString()
+                << "\n"
+                << "\t  output: " << params.output_descriptor.ToString()
+                << "\n";
+    TAO_VLOG(0) << "\talgorithm: " << algorithm.ToString();
+    TAO_VLOG(0) << "\tprofile_result: " << profile_result;
+    TAO_VLOG(0) << "\tscratch: " << scratch_allocator;
+  }
+
+  Status status = OkStatus();
+
+  switch (kind) {
+    case ConvolutionKind::FORWARD:
+
+#if (TF_MAJOR_VERSION == 2 && TF_MINOR_VERSION > 6) || TF_MAJOR_VERSION > 2
+      stream->FusedConvolveWithAlgorithm(
+          input_descriptor, input_buf, params.scale, filter_descriptor,
+          filter_buf, convolution_descriptor, output_buf, (float)0.0,
+          params.bias_descriptor, DeviceMemory<int32_t>(operand_buffers[2]),
+          se::dnn::ActivationMode::kNone, output_descriptor, &output_buf,
+          scratch_allocator, algorithm, profile_result);
+#elif TF_MAJOR_VERSION > 1
+      stream->FusedConvolveWithAlgorithm(
+          input_descriptor, input_buf, params.scale, filter_descriptor,
+          filter_buf, convolution_descriptor, output_buf, (float)0.0,
+          params.bias_descriptor, DeviceMemory<float>(operand_buffers[2]),
+          se::dnn::ActivationMode::kNone, output_descriptor, &output_buf,
+          scratch_allocator, algorithm, profile_result);
+#elif TF_MAJOR_VERSION == 1 && TF_MINOR_VERSION == 12
+      return errors::Internal("Not supported on tensorflow==1.12");
+#else
+      stream->ThenFusedConvolveWithAlgorithm(
+          input_descriptor, input_buf, params.scale, filter_descriptor,
+          filter_buf, convolution_descriptor, output_buf, (float)0.0,
+          params.bias_descriptor, DeviceMemory<int32_t>(operand_buffers[2]),
+          se::dnn::ActivationMode::kNone, output_descriptor, &output_buf,
+          scratch_allocator, algorithm, profile_result);
+#endif
+      break;
+    default:
+      return errors::Internal("Not known CudnnConvKind");
+  }
+
+  if (!status.ok()) return status;
+  if (!stream->ok()) {
+    return errors::Internal("Unable to launch convolution");
+  }
+  return OkStatus();
 }
 
 template <typename T>
@@ -1254,8 +1527,10 @@ bool PickBestAlgorithm(CudnnConvParams& params,
                               result_buffer, &scratch_allocator)) {
     params.algo_id = profile_result.algorithm().algo_id();
     params.tensor_ops_enabled = profile_result.algorithm().tensor_ops_enabled();
+    params.workspace_size = profile_result.algorithm().workspace_size();
 #else
-  for (const AlgorithmDesc& alg : GetAlgorithms(params.kind, stream_exec)) {
+  for (const AlgorithmDesc& alg :
+       GetAlgorithms(params.kind, se::dnn::ToDataType<T>::value, stream_exec)) {
     params.algo_id = alg.algo_id();
     params.tensor_ops_enabled = alg.tensor_ops_enabled();
     se::dnn::ProfileResult profile_result;
@@ -1283,10 +1558,98 @@ bool PickBestAlgorithm(CudnnConvParams& params,
     params.algo_id = best_result.algorithm().algo_id();
     params.tensor_ops_enabled = best_result.algorithm().tensor_ops_enabled();
     params.best_result_bytes_used = best_result_bytes_used;
+#ifndef TENSORFLOW_USE_ROCM and \
+    ((TF_MAJOR_VERSION == 2 && TF_MINOR_VERSION > 4) || TF_MAJOR_VERSION > 2)
+    params.workspace_size = best_result_bytes_used;
+#endif
   }
 
   return true;
 }  // namespace gpu_conv_impl
+
+static bool layout_match(const std::vector<int32_t>& ref,
+                         const MemRefType<int32_t, 1>& metadata) {
+  if (ref.size() > metadata.sizes[0]) {
+    return false;
+  }
+  for (size_t i = 0; i < ref.size(); ++i) {
+    if (ref[i] != metadata.data[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+#if defined(PLATFORM_ALIBABA) and defined(ENABLE_BLADE_GEMM)
+template <typename T, int N>
+bool ral_conv_bladnn(ExecutionContext* ctx, void* stream_handle,
+                     MemRefType<T, N> input, MemRefType<T, N> kernel,
+                     MemRefType<int32_t, 1> padding, MemRefType<T, N> output,
+                     MemRefType<int32_t, 1> metadata, float alpha = 1.0) {
+  // nchw=0123 iohw=0123
+  // const std::vector<int32_t> nchw_oihw_layout = {0, 1, 2, 3, 1, 0,
+  //                                                2, 3, 0, 1, 2, 3};
+  // const std::vector<int32_t> nhwc_hwio_layout = {0, 3, 1, 2, 2, 3,
+  //                                                0, 1, 0, 3, 1, 2};
+  const std::vector<int32_t> nhwc_ohwi_layout = {0, 3, 1, 2, 3, 0,
+                                                 1, 2, 0, 3, 1, 2};
+  if (layout_match(nhwc_ohwi_layout, metadata)) {
+    auto gpu_driver = ctx->getDriver<GPUDriver>(GPUDriver::name());
+    auto stream =
+        static_cast<se::Stream*>(gpu_driver->asSEStream(ctx, stream_handle));
+    void* s = stream->implementation()->GpuStreamHack();
+    int32_t n = input.sizes[0];
+    assert(n == output.sizes[0]);
+    T* a_data = input.data;
+    T* b_data = kernel.data;
+    T* c_data = output.data;
+    int32_t ic = 0;
+    int32_t oc = 0;
+    int32_t ih = 0;
+    int32_t iw = 0;
+    int32_t oh = 0;
+    int32_t ow = 0;
+    int32_t kh = 0;
+    int32_t kw = 0;
+    int32_t ki = 0;
+    int32_t ko = 0;
+    ih = input.sizes[1];
+    iw = input.sizes[2];
+    ic = input.sizes[3];
+    ko = kernel.sizes[0];
+    kh = kernel.sizes[1];
+    kw = kernel.sizes[2];
+    ki = kernel.sizes[3];
+    oh = output.sizes[1];
+    ow = output.sizes[2];
+    oc = output.sizes[3];
+    assert(ko == oc);
+    int pad_h = padding.data[0];
+    int pad_w = padding.data[2];
+    size_t offset = N * 3;
+    int stride_h = metadata.data[offset++];
+    int stride_w = metadata.data[offset++];
+    int dilation_h = metadata.data[offset++];
+    int dilation_w = metadata.data[offset++];
+    int32_t groups = 1;
+    if (ic != ki) {
+      return false;
+    }
+    auto conv_kind = bladnn::ConvKind::kFprop;
+    auto data_layout = bladnn::Layout::kNHWC;
+    auto kernel_layout = bladnn::Layout::kNHWC;
+    const float beta = 0.0f;
+    bladnn::Dtype dtype = toBlaDNNDtype<T>();
+    bool ret = false;
+    ret = bladnn::conv2d(s, dtype, dtype, conv_kind, data_layout, kernel_layout,
+                         n, ih, iw, ic, ko, kh, kw, oh, ow, pad_h, pad_w,
+                         stride_h, stride_w, dilation_h, dilation_w, groups,
+                         &alpha, a_data, b_data, &beta, c_data, c_data);
+    return ret;
+  }
+  return false;
+}
+#endif
 
 template <typename T, int N>
 void ral_conv(ExecutionContext* ctx, void* stream_handle,
@@ -1313,6 +1676,14 @@ void ral_conv(ExecutionContext* ctx, void* stream_handle,
       TAO_VLOG(0) << "\t#" << i << ": " << metadata.data[i];
     }
   }
+
+#if defined(PLATFORM_ALIBABA) and defined(ENABLE_BLADE_GEMM) and \
+    !(TENSORFLOW_USE_ROCM)
+  if (ral_conv_bladnn<T, N>(ctx, stream_handle, input, kernel, padding, output,
+                            metadata)) {
+    return;
+  }
+#endif
 
   auto key = makeConvTuningCacheKey(input, kernel, padding, output, metadata);
   CudnnConvParams* params = nullptr;
@@ -1368,6 +1739,126 @@ void ral_conv(ExecutionContext* ctx, void* stream_handle,
   return;
 }
 
+template <typename T, int N>
+void ral_qconv(ExecutionContext* ctx, void* stream_handle,
+               MemRefType<T, N> input, MemRefType<T, N> kernel,
+               MemRefType<int32_t, 1> padding, MemRefType<float, 0> inputScales,
+               MemRefType<int32_t, 0> inputZeroPoints,
+               MemRefType<float, 1> weightScales,
+               MemRefType<int32_t, 1> weightZeroPoints,
+               MemRefType<float, 0> resultScales,
+               MemRefType<int32_t, 0> resultZeroPoints, MemRefType<T, N> output,
+               MemRefType<int32_t, 1> metadata) {
+  static_assert(N > 2, "dimension should be larger than 2");
+  if (isEmptyMemref(input) || isEmptyMemref(kernel) || isEmptyMemref(output)) {
+    TAO_VLOG(1) << "ral_conv: early return for empty tensor";
+    return;
+  }
+
+  if (TAO_VLOG_IS_ON(2)) {
+    print_memref(input, "input");
+    print_memref(kernel, "kernel");
+    print_memref(padding, "padding");
+    for (int i = 0; i < N - 2; ++i) {
+      TAO_VLOG(0) << "\tpadding for dim #" << i << ": (" << padding.data[2 * i]
+                  << ", " << padding.data[2 * i + 1] << ")";
+    }
+    print_memref(output, "output");
+    print_memref(metadata, "metadata");
+    for (int i = 0; i < 5 * N - 4; ++i) {
+      TAO_VLOG(0) << "\t#" << i << ": " << metadata.data[i];
+    }
+  }
+
+  auto gpu_driver = ctx->getDriver<GPUDriver>(GPUDriver::name());
+  float input_scale, weight_scale, result_scale;
+  gpu_driver->d2h(ctx, stream_handle, &inputScales.data[0], &input_scale,
+                  sizeof(float));
+  gpu_driver->d2h(ctx, stream_handle, &weightScales.data[0], &weight_scale,
+                  sizeof(float));
+  gpu_driver->d2h(ctx, stream_handle, &resultScales.data[0], &result_scale,
+                  sizeof(float));
+
+  gpu_driver->syncOnStream(ctx, stream_handle);
+
+  float kernel_scale = input_scale * weight_scale / result_scale;
+
+#if defined(PLATFORM_ALIBABA) and defined(ENABLE_BLADE_GEMM) and \
+    !(TENSORFLOW_USE_ROCM)
+  if (ral_conv_bladnn<T, N>(ctx, stream_handle, input, kernel, padding, output,
+                            metadata, kernel_scale)) {
+    return;
+  }
+#endif
+
+  auto key = makeConvTuningCacheKey(input, kernel, padding, output, metadata);
+  CudnnConvParams* params = nullptr;
+  std::string unique_name =
+      "tao_ral.gpu.qconv_" + tao::ral::TaoTypeNameHelper<T>::Invoke();
+  auto& state = RalConvState::Get();
+  auto stream =
+      static_cast<se::Stream*>(gpu_driver->asSEStream(ctx, stream_handle));
+
+  std::vector<se::DeviceMemoryBase> operand_se_buffers;
+  operand_se_buffers.emplace_back(GetDeviceAddress(input));
+  operand_se_buffers.emplace_back(GetDeviceAddress(kernel));
+  // buffer for bias
+  operand_se_buffers.emplace_back(GetDeviceAddress(weightZeroPoints));
+  se::DeviceMemoryBase result_buffer = GetDeviceAddress(output);
+
+  {
+    std::lock_guard<std::mutex> l(state.mu);
+    auto& cache = state.cache_table[unique_name];
+    auto it = cache.find(key);
+    if (it == cache.end()) {
+      auto params_ptr = makeNewConvParams(key);
+      auto& params = *params_ptr;
+      params.scale = kernel_scale;
+      BatchDescriptor bias_desc;
+      bias_desc.set_count(1)
+          .set_height(1)
+          .set_width(1)
+          .set_feature_map_count(params.output_descriptor.feature_map_count())
+          .set_layout(params.output_dl);
+      params.bias_descriptor.CloneFrom(bias_desc);
+      if (!params_ptr) {
+        print_memref(metadata, "metadata");
+        for (int i = 0; i < 5 * N - 4; ++i) {
+          TAO_VLOG(0) << "\t#" << i << ": " << metadata.data[i];
+        }
+        ctx->signalError(Context::FAILURE, "illegal conv op");
+        return;
+      }
+
+      if (!PickBestAlgorithm<T>(*params_ptr, operand_se_buffers, result_buffer,
+                                stream, ctx, gpu_driver)) {
+        ctx->signalError(Context::FAILURE, "fail to tune conv op");
+        return;
+      }
+
+      it = cache.emplace(key, std::move(*params_ptr)).first;
+    }
+    params = &it->second;
+  }
+
+  if (params == nullptr) {
+    ctx->signalError(Context::FAILURE,
+                     "unable to build conv params to launch a conv");
+    return;
+  }
+
+  ScratchAllocator scratch_allocator(ctx, gpu_driver);
+  Status launch_status = RunCudnnConvolution<T>(
+      *params, operand_se_buffers, result_buffer, &scratch_allocator, stream,
+      /*profile_result*/ nullptr);
+  if (!launch_status.ok()) {
+    std::string err_msg =
+        "d_conv launch failed: " + launch_status.error_message();
+    ctx->signalError(Context::FAILURE, err_msg);
+  }
+  return;
+}
+
 }  // namespace gpu_conv_impl
 
 ////////////////////////////////////////////////////////////////////////
@@ -1383,6 +1874,7 @@ TAO_RAL_API("ral_gemm", "gpu", gpu::se_impl::ral_gemm<float, float>);
 TAO_RAL_API("ral_gemm", "gpu", gpu::se_impl::ral_gemm<double, double, double>);
 TAO_RAL_API("ral_gemm", "gpu",
             gpu::se_impl::ral_gemm<Eigen::half, Eigen::half>);
+TAO_RAL_API("ral_qgemm", "gpu", gpu::se_impl::ral_qgemm);
 TAO_RAL_API("ral_gemm", "gpu", gpu::se_impl::ral_batch_gemm<float, float, 3>);
 TAO_RAL_API("ral_gemm", "gpu", gpu::se_impl::ral_batch_gemm<float, float, 4>);
 TAO_RAL_API("ral_gemm", "gpu",
@@ -1407,6 +1899,12 @@ TAO_RAL_API("ral_conv", "gpu",
 TAO_RAL_API("ral_conv", "gpu", gpu::se_impl::gpu_conv_impl::ral_conv<float, 3>);
 TAO_RAL_API("ral_conv", "gpu",
             gpu::se_impl::gpu_conv_impl::ral_conv<Eigen::half, 3>);
+TAO_RAL_API("ral_qconv", "gpu",
+            gpu::se_impl::gpu_conv_impl::ral_qconv<int8_t, 4>);
+
+// compute-intensive fusion
+TAO_RAL_API("ral_comp_intens_fusion", "gpu",
+            gpu::se_impl::ral_comp_intens_fusion);
 
 }  // namespace ral
 }  // namespace tao

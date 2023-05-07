@@ -14,7 +14,6 @@
 from __future__ import print_function
 import os
 from test.tao_ut_common import TaoTestCase
-import unittest
 try:
     import tensorflow.compat.v1 as tf
     tf.disable_v2_behavior()
@@ -33,6 +32,7 @@ class MlirTestCase(TaoTestCase):
         os.environ["TF_XLA_FLAGS"]="--tf_xla_min_cluster_size=1"
         os.environ["TAO_COMPILATION_MODE_ASYNC"] = "false"
         os.environ["TAO_ENABLE_FALLBACK"] = "false"
+        os.environ["TAO_MLIR_BRANCH_ONLY"] = "true"
         TaoTestCase._setup_dump_graph(testcase)
         TaoTestCase._setup_tf_logging()
         TaoTestCase._locate_tao_compiler()

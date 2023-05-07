@@ -23,19 +23,19 @@
 
 #include <map>
 
-#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/GPU/Transforms/Utils.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/IR/BlockAndValueMapping.h"
 #include "mlir/IR/Builders.h"
+#include "mlir/IR/IRMapping.h"
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/Interfaces/ViewLikeInterface.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/RegionUtils.h"
-#include "tensorflow/compiler/mlir/disc/disc_util.h"
-#include "tensorflow/compiler/mlir/disc/transforms/PassDetail.h"
-#include "transforms/placement_utils.h"
+#include "mlir/disc/disc_util.h"
+#include "mlir/disc/transforms/PassDetail.h"
+#include "mlir/disc/transforms/placement_utils.h"
 
 namespace mlir {
 namespace disc_ral {
@@ -131,7 +131,7 @@ int64_t getFirstOperandIndex(Operation* op, Value value) {
   return -1;
 }
 
-// Operation *Operation::clone(BlockAndValueMapping &mapper) {
+// Operation *Operation::clone(IRMapping &mapper) {
 //   auto *newOp = cloneWithoutRegions(mapper);
 //
 //   // Clone the regions.
@@ -143,10 +143,9 @@ int64_t getFirstOperandIndex(Operation* op, Value value) {
 
 // This method is revised from Region::cloneinto()
 // TODO: any easier ways?
-void cloneRegionAndRemapLoad(Region* src, Region* dest,
-                             BlockAndValueMapping& mapper, int64_t memref_idx,
-                             Value memref_arg, Block& new_entry_block,
-                             bool is_entry) {
+void cloneRegionAndRemapLoad(Region* src, Region* dest, IRMapping& mapper,
+                             int64_t memref_idx, Value memref_arg,
+                             Block& new_entry_block, bool is_entry) {
   assert(dest && "expected valid region to clone into");
   assert(src != dest && "cannot clone region into itself");
   Region::iterator destPos = dest->end();
@@ -321,11 +320,11 @@ gpu::LaunchFuncOp expandMemRef(gpu::LaunchFuncOp launch_func_op, Value memref,
                            b.getUnitAttr());
 
   // clone the Ops in the body of the gpu.FuncOp
-  BlockAndValueMapping map;
-  Region& new_gpu_func_body = new_gpu_func_op.body();
+  IRMapping map;
+  Region& new_gpu_func_body = new_gpu_func_op.getBody();
   Block& new_gpu_func_entry_block = new_gpu_func_body.front();
   for (auto operand :
-       llvm::enumerate(gpu_func_op.body().front().getArguments())) {
+       llvm::enumerate(gpu_func_op.getBody().front().getArguments())) {
     if (operand.index() == memref_idx) {
       continue;
     } else if (operand.index() < memref_idx) {
@@ -337,17 +336,17 @@ gpu::LaunchFuncOp expandMemRef(gpu::LaunchFuncOp launch_func_op, Value memref,
     }
   }
   // memref of the entry block
-  auto memref_arg = gpu_func_op.body().front().getArgument(memref_idx);
-  Block& new_entry_block = new_gpu_func_op.body().front();
-  cloneRegionAndRemapLoad(&gpu_func_op.body(), &new_gpu_func_op.body(), map,
-                          memref_idx, memref_arg, new_entry_block, true);
+  auto memref_arg = gpu_func_op.getBody().front().getArgument(memref_idx);
+  Block& new_entry_block = new_gpu_func_op.getBody().front();
+  cloneRegionAndRemapLoad(&gpu_func_op.getBody(), &new_gpu_func_op.getBody(),
+                          map, memref_idx, memref_arg, new_entry_block, true);
 
   // update the FunctionType of the gpu.Launchfunc inside the module
   b.setInsertionPoint(launch_func_op);
   auto new_launch_func_op = b.create<gpu::LaunchFuncOp>(
       loc, new_gpu_func_op, launch_func_op.getGridSizeOperandValues(),
       launch_func_op.getBlockSizeOperandValues(),
-      launch_func_op.dynamicSharedMemorySize(), new_operands);
+      launch_func_op.getDynamicSharedMemorySize(), new_operands);
 
   launch_func_op.erase();
   gpu_func_op.erase();
@@ -397,7 +396,7 @@ class ReviseGpuKernelOutliningPass
         if (memref.index() < gpu::LaunchOp::kNumConfigOperands) {
           continue;
         }
-        auto arg_memref = gpu_func_op.body().front().getArgument(
+        auto arg_memref = gpu_func_op.getBody().front().getArgument(
             memref.index() - gpu::LaunchOp::kNumConfigOperands);
         if (arg_memref.getType().isa<MemRefType>() &&
             (!placement_utils::isGpuMemRef(arg_memref))) {
@@ -429,7 +428,9 @@ class ReviseGpuKernelOutliningPass
       assert(gpu_func_op && "gpu_func_op is empty");
       gpu_func_op.walk([&](AllocOp alloc) {
         auto memref_type = alloc.getResult().getType().cast<MemRefType>();
-        assert(memref_type.getMemorySpaceAsInt() ==
+        assert(memref_type.getMemorySpace()
+                       .dyn_cast<gpu::AddressSpaceAttr>()
+                       .getValue() ==
                    gpu::GPUDialect::getWorkgroupAddressSpace() &&
                "unexpected alloc op in gpu_func_op");
         convertWorkgroupBuffer(gpu_func_op, alloc);

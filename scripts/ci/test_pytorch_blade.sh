@@ -25,12 +25,27 @@ export LIBRARY_PATH=${CUDA_HOME}/lib64:$LIBRARY_PATH
 export TF_REMOTE_CACHE=${TF_REMOTE_CACHE}
 export TORCH_BLADE_BUILD_TENSORRT_STATIC=${TORCH_BLADE_BUILD_TENSORRT_STATIC:-OFF}
 
+function delete_disk_caches() {
+  # https://bazel.build/remote/caching#delete-remote-cache
+  ndays=10
+  if [ -d "cas" ] && [ -d "ac" ]; then
+    echo "Before old disk caches deleting"
+    du cas/ ac/ --max-depth=0 -h
+    find cas -type f -mtime +${ndays} -delete
+    find ac -type f -mtime +${ndays} -delete
+    echo "After old disk caches deleting"
+    du cas/ ac/ --max-depth=0 -h
+  fi
+}
+
+(cd ~/.cache/ && delete_disk_caches)
+
 if [[ -f ~/.cache/proxy_config ]]; then
   source ~/.cache/proxy_config
 fi
 
 # cleanup build cache
-(cd tf_community && bazel clean --expunge)
+(cd tao_compiler && bazel clean --expunge)
 
 # note(yancey.yx): using virtualenv to avoid permission issue on workflow actions CI,
 if [ $TORCH_BLADE_CI_BUILD_TORCH_VERSION = "ngc" ]; then
@@ -55,5 +70,12 @@ export TORCH_BLADE_CI_BUILD_TORCH_VERSION=${TORCH_BLADE_CI_BUILD_TORCH_VERSION:-
 
 mkdir -p build && \
 mv pytorch_blade/dist/torch_blade*.whl ./build
+
+case $TORCH_BLADE_CI_BUILD_TORCH_VERSION in
+  *1.11.* | *1.12.* | *1.13.*)
+    (cd tools/torch_quant && bash ./test.sh)
+    mv tools/torch_quant/dist/torch_quant*.whl ./build
+    ;;
+esac
 
 deactivate

@@ -29,15 +29,12 @@ limitations under the License.
 #include <unordered_map>
 
 #include "absl/strings/str_split.h"
+#include "decoupling/compiler_base.h"
+#include "decoupling/tao_compiler_input.pb.h"
+#include "decoupling/tao_compiler_trace.h"
 #include "llvm/Support/CommandLine.h"
 #include "mlir/Pass/PassManager.h"  // from @llvm-project
 #include "mlir/Support/Timing.h"    // from @llvm-project
-#ifdef PLATFORM_ALIBABA
-#include "tensorflow/compiler/decoupling_xla/tao_compiler.h"
-#endif
-#include "tensorflow/compiler/decoupling/compiler_base.h"
-#include "tensorflow/compiler/decoupling/tao_compiler_input.pb.h"
-#include "tensorflow/compiler/decoupling/tao_compiler_trace.h"
 #include "tensorflow/compiler/xla/debug_options_flags.h"
 #include "tensorflow/compiler/xla/statusor.h"
 #include "tensorflow/core/lib/strings/strcat.h"
@@ -108,7 +105,7 @@ Status RealMain(int argc, char** argv) {
 
   if (version) {
     std::cout << version_info() << std::endl;
-    return Status::OK();
+    return tsl::OkStatus();
   }
 
   tensorflow::tao::TaoCompilerInput input;
@@ -141,20 +138,21 @@ Status RealMain(int argc, char** argv) {
   }
 
   DeviceType device_type(input.options().device_type());
-  auto* compiler_wrapper =
-      CompilerBase::GetCompilerForDevice(device_type).ValueOrDie();
+  auto status_or = CompilerBase::GetCompilerForDevice(device_type);
+  if (!status_or.ok()) return status_or.status();
+  auto* compiler_wrapper = status_or.value();
   TF_RETURN_IF_ERROR(compiler_wrapper->Compile(input, output_fn));
   tao::TaoCompilerTrace::Instance()->Shutdown();
-  return Status::OK();
+  return tsl::OkStatus();
 }
 
 }  // namespace tensorflow
 
 int main(int argc, char** argv) {
-  std::vector<tensorflow::Flag> flag_list;
+  std::vector<tsl::Flag> flag_list;
   xla::AppendDebugOptionsFlags(&flag_list);
-  std::string usage = tensorflow::Flags::Usage(argv[0], flag_list);
-  if (!tensorflow::Flags::Parse(&argc, argv, flag_list)) {
+  std::string usage = tsl::Flags::Usage(argv[0], flag_list);
+  if (!tsl::Flags::Parse(&argc, argv, flag_list)) {
     LOG(ERROR) << "\n" << usage;
     return -1;
   }

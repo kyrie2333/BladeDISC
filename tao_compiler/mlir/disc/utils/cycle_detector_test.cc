@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "tensorflow/compiler/mlir/disc/utils/cycle_detector.h"
+#include "mlir/disc/utils/cycle_detector.h"
 
 #include "tensorflow/compiler/xla/test.h"
 
@@ -74,7 +74,7 @@ TEST_F(GraphCyclesTest, ContractEdge) {
   ASSERT_TRUE(AddEdge(3, 4));
 
   // It will introduce a cycle if the edge is contracted
-  EXPECT_FALSE(g_.ContractEdge(1, 3).hasValue());
+  EXPECT_FALSE(g_.ContractEdge(1, 3).has_value());
   EXPECT_TRUE(g_.HasEdge(1, 3));
 
   // Node (2) has more edges.

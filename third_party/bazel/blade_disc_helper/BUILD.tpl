@@ -6,11 +6,6 @@ config_setting(
 )
 
 config_setting(
-    name = "is_patine",
-    define_values = {"is_patine": "true"},
-)
-
-config_setting(
     name = "is_mkldnn",
     define_values = {"is_mkldnn": "true"},
 )
@@ -28,4 +23,9 @@ config_setting(
 config_setting(
     name = "is_cxx11_abi",
     define_values = {"is_cxx11_abi": "true"},
+)
+
+config_setting(
+    name = "is_internal_serving",
+    define_values = {"is_internal_serving": "true"},
 )

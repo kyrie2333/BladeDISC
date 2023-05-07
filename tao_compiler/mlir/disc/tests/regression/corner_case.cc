@@ -9,14 +9,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "tensorflow/compiler/mlir/disc/tests/mlir_feature_test.h"
-#include "tensorflow/compiler/mlir/disc/tests/mlir_test.h"
+#include "mlir/disc/tests/mlir_feature_test.h"
+#include "mlir/disc/tests/mlir_test.h"
 #include "tensorflow/core/platform/test.h"
 
 namespace mlir_test {
 
-const std::string c_ft_path =
-    "tensorflow/compiler/mlir/disc/tests/regression/data/";
+const std::string c_ft_path = "mlir/disc/tests/regression/data/";
 
 #if CUDA_VERSION >= 11100
 // This case fails with PTXAS of version 11.0. Log here to know this error
@@ -31,5 +30,17 @@ TEST(KCornerCaseTest, CornerCaseErrorBeforePTXASX11100) {
       /*output_descriptors*/ {"f32_X"}));
 }
 #endif
+
+TEST(KCornerCaseTest, FusionOrderMismatch) {
+  EXPECT_TRUE(feature_test_main(
+      /*mlir_file_path*/ c_ft_path + "corner_case_fusion_order_mismatch.mlir",
+      /*backend_types*/ {BackendType::kAArch64},
+      /*num_inputs*/ 5,
+      /*num_outputs*/ 1,
+      /*input_descriptors*/
+      {"i32_X", "1xi32_X", "f32_X", "280xf32_X", "1x66x560xf32_X"},
+      /*output_descriptors*/ {"i32_X"},
+      /*input_vals*/ {{0}, {66}, {17.8885441}, {}, {}}));
+}
 
 }  // namespace mlir_test

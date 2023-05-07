@@ -12,23 +12,54 @@
 #ifndef TENSORFLOW_COMPILER_MLIR_XLA_RAL_CONTEXT_STREAM_EXECUTOR_BASED_IMPL_H_
 #define TENSORFLOW_COMPILER_MLIR_XLA_RAL_CONTEXT_STREAM_EXECUTOR_BASED_IMPL_H_
 
-#include "tensorflow/compiler/mlir/xla/ral/ral_helper.h"
+#include "mlir/xla/ral/ral_helper.h"
 
 #ifdef TAO_RAL_USE_STREAM_EXECUTOR
 
-#include "tensorflow/core/framework/op.h"
-#include "tensorflow/core/framework/op_kernel.h"
-#include "tensorflow/core/platform/stream_executor.h"
-#include "tensorflow/core/platform/stream_executor_no_cuda.h"
+#ifdef DISC_BUILD_FROM_TF_BRIDGE
 #include "tensorflow/stream_executor/device_memory.h"
 #include "tensorflow/stream_executor/multi_platform_manager.h"
+#include "tensorflow/stream_executor/stream_executor.h"
+#else  // DISC_BUILD_FROM_TF_BRIDGE
+#include "tensorflow/compiler/xla/stream_executor/device_memory.h"
+#include "tensorflow/compiler/xla/stream_executor/multi_platform_manager.h"
+#include "tensorflow/compiler/xla/stream_executor/stream_executor.h"
+#endif  // DISC_BUILD_FROM_TF_BRIDGE
 
+#include "tensorflow/core/framework/op.h"
+#include "tensorflow/core/framework/op_kernel.h"
+#include "tensorflow/core/platform/stream_executor_no_cuda.h"
+
+#if defined(PLATFORM_ALIBABA) and defined(ENABLE_BLADE_GEMM)
+#include "bladnn/bladnn.h"
+#endif
 namespace tao {
 namespace ral {
 
 DEFINE_TAO_TYPE_NAME_HELPER(Eigen::half, "f16");
 
-namespace gpu {}  // namespace gpu
+namespace gpu {
+
+#if defined(PLATFORM_ALIBABA) and defined(ENABLE_BLADE_GEMM)
+template <typename T>
+bladnn::Dtype toBlaDNNDtype() {
+  if (std::is_same<T, int8_t>::value) {
+    return bladnn::Dtype::kS8;
+  }
+  if (std::is_same<T, Eigen::half>::value) {
+    return bladnn::Dtype::kF16;
+  }
+  if (std::is_same<T, float>::value) {
+    return bladnn::Dtype::kF32;
+  }
+  if (std::is_same<T, double>::value) {
+    return bladnn::Dtype::kF64;
+  }
+  return bladnn::Dtype::kUnknown;
+}
+#endif
+
+}  // namespace gpu
 }  // namespace ral
 }  // namespace tao
 

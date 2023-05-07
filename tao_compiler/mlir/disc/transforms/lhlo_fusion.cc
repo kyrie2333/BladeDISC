@@ -18,13 +18,14 @@ limitations under the License.
 #include "mlir/IR/Matchers.h"
 #include "mlir/Pass/Pass.h"               // TF:local_config_mlir
 #include "mlir/Transforms/RegionUtils.h"  // TF:llvm-project
-#include "tensorflow/compiler/mlir/disc/disc_util.h"
-#include "tensorflow/compiler/mlir/disc/transforms/PassDetail.h"
-#include "tensorflow/compiler/mlir/disc/transforms/disc_shape_optimization_utils.h"
-#include "tensorflow/compiler/mlir/disc/transforms/fusion_utils.h"
-#include "tensorflow/compiler/mlir/disc/transforms/placement_utils.h"
-#include "tensorflow/compiler/mlir/disc/transforms/shape_utils.h"
-#include "tensorflow/compiler/mlir/disc/utils/cycle_detector.h"
+#include "mlir/disc/IR/lhlo_disc_ops.h"
+#include "mlir/disc/disc_util.h"
+#include "mlir/disc/transforms/PassDetail.h"
+#include "mlir/disc/transforms/disc_shape_optimization_utils.h"
+#include "mlir/disc/transforms/fusion_utils.h"
+#include "mlir/disc/transforms/placement_utils.h"
+#include "mlir/disc/transforms/shape_utils.h"
+#include "mlir/disc/utils/cycle_detector.h"
 #include "tensorflow/core/util/env_var.h"
 
 // This pass has similar functionality of the fusion pass in XLA stack.
@@ -113,6 +114,7 @@ class FusionPlanner {
       op_list_.push_back(&op);
     }
     cycle_detector_.reset(new GraphCycles(op_list_.size()));
+    original_graph_with_explicit_edges_.reset(new GraphCycles(op_list_.size()));
     BuildNodeMap();
   }
 
@@ -137,7 +139,13 @@ class FusionPlanner {
     // a same fusion pattern are grouped into a cluster.
     for (auto& strategy : fusionPipeline_) {
       currentFusionStrategy_ = strategy.get();
+      // Re-init non-fusible fusion pattern using the given fusion strategy
+      // since different fusion strategy may support different set of ops.
+      initFusionPatterns();
       RunEdgeContractionLoop();
+      if (!RunFusionPatternFinalization()) {
+        return llvm::None;
+      }
       LLVM_DEBUG(dumpCluster());
     }
 
@@ -152,7 +160,9 @@ class FusionPlanner {
       FusionPattern& fusion_pattern = cluster->fused_pattern();
       // Make sure the ops in a fusion pattern are in topological ordering.
       fusion_pattern.sortFusionOpListBy(op_to_node_id_);
-      if (!fusion_pattern.isFusible() || fusion_pattern.effectiveSize() <= 1) {
+      if (!fusion_pattern.isFusible() || fusion_pattern.effectiveSize() < 1 ||
+          !fusion_pattern.isTransformBasedFusion() &&
+              fusion_pattern.effectiveSize() == 1) {
         continue;
       }
       plan.emplace_back(fusion_pattern);
@@ -175,6 +185,9 @@ class FusionPlanner {
    public:
     Cluster(int node_id, FusionPlanner* planner)
         : node_id_(node_id), pattern_(planner->op_list()[node_id]) {}
+
+    Cluster(int node_id, FusionPattern& fusion_pattern)
+        : node_id_(node_id), pattern_(fusion_pattern) {}
 
     // The number of nodes in this cluster.
     int cluster_size() { return pattern_.size(); }
@@ -202,11 +215,20 @@ class FusionPlanner {
   // Returns a new cluster with specified `cycles_graph_node_id`
   Cluster* MakeCluster(int cycles_graph_node_id) {
     cluster_storage_.emplace_back(new Cluster(cycles_graph_node_id, this));
-    bool status = getFusionStrategy().initFusionPattern(
+    getFusionStrategy().initFusionPattern(
         *shape_analysis_, cluster_storage_.back()->fused_pattern());
-    assert(status);
-    (void)(status);
     return cluster_storage_.back().get();
+  }
+
+  // init non-fusible fusion pattern with only one op using the given fusion
+  // strategy since different fusion strategy may support different set of ops.
+  void initFusionPatterns() {
+    for (int32_t node : cycle_detector_->AllNodesInPostOrder()) {
+      Cluster* cluster = GetClusterForCyclesGraphNode(node);
+      FusionPattern& pattern = cluster->fused_pattern();
+      if (pattern.isFusible()) continue;
+      getFusionStrategy().initFusionPattern(*shape_analysis_, pattern);
+    }
   }
 
   // Metadata ops (e.g. shapeOf, dimOp) don't change data thus we move forward
@@ -278,19 +300,36 @@ class FusionPlanner {
         }
         // Add an edge to connect the last writer and the current consumer.
         cycle_detector_->InsertEdge(iter->second, node_id);
+        original_graph_with_explicit_edges_->InsertEdge(iter->second, node_id);
       }
 
       // For some ops (e.g. lmhlo ops), some operands are the output memrefs
       // Thus these operands are supposed to be updated.
       // Suppose that an op (or its nested ops) can only write the buffers
       // explicit passed in as operands of this op.
-      int num_input_operand = op->getNumOperands() - getNumResultOperands(op);
-      for (Value v : op->getOperands().drop_front(num_input_operand)) {
-        auto it = last_writer_.try_emplace(v, op);
-        (void)it;
-        // Currently, a buffer is only supposed to be written once (as the
-        // output operand of one lmhlo op).
-        assert(it.second);
+      if (op->getDialect()->getTypeID() != TypeID::get<lmhlo::LmhloDialect>() &&
+          op->getDialect()->getTypeID() !=
+              TypeID::get<lmhlo_disc::LmhloDiscDialect>()) {
+        // If an op is not in lmhlo or lmhlo_disc dialect, it may be written
+        // multiple times (e.g. multiple memref.store ops for the same
+        // underlying buffer).
+        for (Value v : op->getOperands()) {
+          if (!IsOpWriteValue(op, v)) continue;
+          last_writer_[v] = op;
+        }
+      } else {
+        // If an op is in lmhlo or lmhlo_disc dialect, output operands can only
+        // be in the end of operands sequence. Note that we also check that a
+        // buffer can only be written once if it's the output operand of one
+        // lmhlo op.
+        int num_input_operand = op->getNumOperands() - getNumResultOperands(op);
+        for (Value v : op->getOperands().drop_front(num_input_operand)) {
+          auto it = last_writer_.try_emplace(v, op);
+          (void)it;
+          // Currently, a buffer is only supposed to be written once (as the
+          // output operand of one lmhlo op).
+          assert(it.second);
+        }
       }
     }
   }
@@ -326,6 +365,8 @@ class FusionPlanner {
 
     if (!enable_cross_fusion) return changed;
 
+    bool mem_intensive_opt_experiment = isMemIntensiveOptExperimentalEnabled();
+
     // To enable even more fusion opportunities (e.g. horizontal fusion)
     for (int32_t lhs : cycle_detector_->AllNodesInPostOrder()) {
       Cluster* cluster_lhs = GetClusterForCyclesGraphNode(lhs);
@@ -334,6 +375,14 @@ class FusionPlanner {
       }
 
       FusionPattern& pattern_lhs = cluster_lhs->fused_pattern();
+      if (mem_intensive_opt_experiment) {
+        auto& lhs_ops = pattern_lhs.getOpList();
+        if (lhs_ops.size() == 1 &&
+            isa<lmhlo::DynamicReshapeOp, lmhlo::ReshapeOp>(lhs_ops[0])) {
+          continue;
+        }
+      }
+
       if (!pattern_lhs.isFusible()) continue;
 
       for (int32_t rhs : cycle_detector_->AllNodesInPostOrder()) {
@@ -343,6 +392,14 @@ class FusionPlanner {
         }
 
         FusionPattern& pattern_rhs = cluster_rhs->fused_pattern();
+        if (mem_intensive_opt_experiment) {
+          auto& rhs_ops = pattern_rhs.getOpList();
+          if (rhs_ops.size() == 1 &&
+              isa<lmhlo::DynamicReshapeOp, lmhlo::ReshapeOp>(rhs_ops[0])) {
+            continue;
+          }
+        }
+
         if (!pattern_rhs.isFusible()) continue;
 
         int idx_lhs = cluster_lhs->cycles_graph_node_id();
@@ -355,24 +412,20 @@ class FusionPlanner {
         // insert a "virtual" edge between `idx_lhs` and `idx_rhs` in order to
         // re-use data structure for normal fusion.
         cycle_detector_->InsertEdge(idx_lhs, idx_rhs);
+        original_graph_with_explicit_edges_->InsertEdge(idx_lhs, idx_rhs);
         bool contracted_edge = fn(cluster_lhs, cluster_rhs);
         // Remove the "virtual" edge if failed to contract `idx_lhs` and
         // `idx_rhs`, otherwise the virtual edge will be removed by design after
         // merging `idx_lhs` and `idx_rhs`
-        if (!contracted_edge) cycle_detector_->RemoveEdge(idx_lhs, idx_rhs);
+        if (!contracted_edge) {
+          cycle_detector_->RemoveEdge(idx_lhs, idx_rhs);
+          original_graph_with_explicit_edges_->RemoveEdge(idx_lhs, idx_rhs);
+        }
         changed |= contracted_edge;
       }
     }
 
     return changed;
-  }
-
-  bool CanContractEdge(int from, int to) {
-    assert(cycle_detector_->HasEdge(from, to));
-    cycle_detector_->RemoveEdge(from, to);
-    bool reachable = cycle_detector_->IsReachable(from, to);
-    cycle_detector_->InsertEdge(from, to);
-    return !reachable;
   }
 
   // This function check if fusing `from` with `to` is valid and if so perform
@@ -384,7 +437,7 @@ class FusionPlanner {
     int from = cluster_from->cycles_graph_node_id();
     int to = cluster_to->cycles_graph_node_id();
 
-    if (!CanContractEdge(from, to)) {
+    if (!cycle_detector_->CanContractEdge(from, to)) {
       // cycle detected, recover the deleted edge.
       LLVM_DEBUG(llvm::dbgs()
                  << "Could not contract " << from << " -> " << to
@@ -398,7 +451,7 @@ class FusionPlanner {
       return false;
     }
     auto optional_merged_node = cycle_detector_->ContractEdge(from, to);
-    assert(optional_merged_node.hasValue());
+    assert(optional_merged_node.has_value());
     cluster_from->set_cycles_graph_node_id(*optional_merged_node);
 
     // Merge the UnionFind Set.
@@ -423,13 +476,166 @@ class FusionPlanner {
     // want to make sure the normal fusion pattern (fusion cross def-use) take
     // first. Without this design, some horizontal fusion may break following
     // normal fusion pattern.
-    if (useHorizontalFusion()) {
+    bool enable_horizontal_fusion = useHorizontalFusion();
+    PlacementAwareFusionStrategy* placement_aware_strategy =
+        reinterpret_cast<PlacementAwareFusionStrategy*>(&getFusionStrategy());
+    auto strategies = placement_aware_strategy->getStrategyMap();
+    if (strategies.size() == 1 &&
+        strategies.find(placement_utils::kGpu) != strategies.end()) {
+      enable_horizontal_fusion &= typeid(*strategies[placement_utils::kGpu]) !=
+                                  typeid(DotGpuFusionStrategy);
+    }
+    if (enable_horizontal_fusion) {
       while (ForEachEdgeInPostOrder(
           std::bind(&FusionPlanner::TryToContractEdge, this, _1, _2), true)) {
         // empty statement by design
       }
     }
     return changed;
+  }
+
+  int32_t reContractEdges(FusionPattern& fusion_pattern,
+                          DenseMap<int32_t, DenseSet<int32_t>>& producers_map,
+                          GraphCycles* cycle_detector,
+                          EquivalenceClasses<int32_t>& leader_for_node) {
+    auto op_list = fusion_pattern.getOpList();
+    if (op_list.size() == 1) {
+      return op_to_node_id_[op_list[0]];
+    }
+    DenseSet<int> node_set;
+    for (auto op : op_list) {
+      int32_t node_id = op_to_node_id_[op];
+      node_set.insert(node_id);
+    }
+    auto roots = fusion_pattern.getRootOps();
+    using NodeAndLead = std::pair<int32_t, int32_t>;
+    SmallVector<NodeAndLead> worklist;
+    for (auto root : roots) {
+      auto node_id = op_to_node_id_[root];
+      worklist.emplace_back(node_id, node_id);
+    }
+
+    while (!worklist.empty()) {
+      auto& curr = worklist.back();
+      int32_t curr_node_id = curr.first;
+      int32_t curr_lead_id = curr.second;
+      worklist.pop_back();
+      SmallVector<int32_t> contracted;
+      auto& producers = producers_map[curr_node_id];
+      for (auto producer : producers) {
+        if (!node_set.contains(producer)) {
+          continue;
+        }
+        if (!cycle_detector->IsActivateNode(producer)) {
+          continue;
+        }
+        if (!cycle_detector->CanContractEdge(producer, curr_lead_id)) {
+          continue;
+        }
+        auto optional_lead_id =
+            cycle_detector->ContractEdge(producer, curr_lead_id);
+        assert(optional_lead_id.has_value());
+        curr_lead_id = optional_lead_id.value();
+        contracted.push_back(producer);
+      }
+      for (auto new_node : contracted) {
+        worklist.emplace_back(new_node, curr_lead_id);
+      }
+    }
+
+    SmallVector<int32_t> node_left;
+    int32_t last_node = -1;
+    for (auto op : fusion_pattern.getOpList()) {
+      int32_t node_id = op_to_node_id_[op];
+      if (cycle_detector->IsActivateNode(node_id)) {
+        node_left.push_back(node_id);
+      }
+      if (last_node != -1) {
+        leader_for_node.unionSets(last_node, node_id);
+      }
+      last_node = node_id;
+    }
+
+    // If contracted successfully, there should be only one activate node left.
+    if (node_left.size() != 1) {
+      return -1;
+    } else {
+      return node_left[0];
+    }
+  }
+
+  bool RunFusionPatternFinalization() {
+    auto original_nodes = cycle_detector_->AllNodesInPostOrder();
+    std::vector<FusionPattern> fusion_patterns;
+    std::vector<Operation*> excluded_ops;
+    for (int32_t node : original_nodes) {
+      Cluster* cluster = GetClusterForCyclesGraphNode(node);
+      FusionPattern fusion_pattern = cluster->fused_pattern();
+      SmallVector<Operation*> curr_excluded_ops;
+      if (!getFusionStrategy().pruneFusionPattern(
+              *shape_analysis_, fusion_pattern, curr_excluded_ops)) {
+        return false;
+      }
+      fusion_patterns.emplace_back(std::move(fusion_pattern));
+      excluded_ops.insert(excluded_ops.end(), curr_excluded_ops.begin(),
+                          curr_excluded_ops.end());
+    }
+
+    if (excluded_ops.empty()) {
+      return true;
+    }
+
+    // The ops inside `excluded_ops` are moved out from existing fusion pattern.
+    // It requires to rebuild cycle_detector_, `cluster_storage_` and
+    // `leader_for_node_`.
+
+    for (auto op : excluded_ops) {
+      fusion_patterns.emplace_back(op);
+      getFusionStrategy().initFusionPattern(*shape_analysis_,
+                                            fusion_patterns.back());
+    }
+
+    std::unique_ptr<GraphCycles> new_cycle_detector(
+        new GraphCycles(op_list_.size()));
+    EquivalenceClasses<int32_t> new_leader_for_node;
+    std::vector<std::unique_ptr<Cluster>> new_cluster_storage(op_list_.size());
+
+    DenseMap<int32_t, DenseSet<int32_t>> producers_map;
+    for (auto op_a : op_list_) {
+      int32_t node_id_a = op_to_node_id_[op_a];
+      new_leader_for_node.insert(node_id_a);
+      for (auto op_b : op_list_) {
+        if (op_a == op_b) {
+          continue;
+        }
+        int32_t node_id_b = op_to_node_id_[op_b];
+        if (original_graph_with_explicit_edges_->HasEdge(node_id_a,
+                                                         node_id_b)) {
+          auto& producers = producers_map[node_id_b];
+          producers.insert(node_id_a);
+          new_cycle_detector->InsertEdge(node_id_a, node_id_b);
+        }
+      }
+    }
+
+    for (auto& fusion_pattern : fusion_patterns) {
+      int32_t cycles_graph_node_id =
+          reContractEdges(fusion_pattern, producers_map,
+                          new_cycle_detector.get(), new_leader_for_node);
+      if (cycles_graph_node_id == -1) {
+        return false;
+      }
+      int32_t lead_node_id = new_leader_for_node.getLeaderValue(
+          op_to_node_id_[fusion_pattern.getOpList()[0]]);
+      new_cluster_storage[lead_node_id].reset(
+          new Cluster(cycles_graph_node_id, fusion_pattern));
+    }
+
+    cycle_detector_ = std::move(new_cycle_detector);
+    cluster_storage_ = std::move(new_cluster_storage);
+    leader_for_node_ = std::move(new_leader_for_node);
+
+    return true;
   }
 
   // Here `value` is supported to be a pointer to buffer.
@@ -467,6 +673,7 @@ class FusionPlanner {
     }
   }
 
+ private:
   // fusion pipeline that controls the behaviour of the fusion planner.
   FusionPipeline& fusionPipeline_;
 
@@ -488,6 +695,10 @@ class FusionPlanner {
   // make sure not introduce cycle after fusion
   std::unique_ptr<GraphCycles> cycle_detector_;
   std::vector<std::unique_ptr<Cluster>> cluster_storage_;
+
+  // Backup the graph cycle information before contracting edges. It also
+  // records the explicit inserted edges for horizontal fusions.
+  std::unique_ptr<GraphCycles> original_graph_with_explicit_edges_;
 
   // a UnionFind set. Each set represents a (partial) fused pattern
   // and has a leader as representation.
@@ -515,11 +726,19 @@ struct DiscFusionPass : public DiscFusionPassBase<DiscFusionPass> {
           makeNewPlacementAwareFusionStrategy(gpu_enabled_, "base"));
     } else if (fusion_strategy_ == "stitch") {
       if (gpu_enabled_) {
+        if (isCompIntensFusionEnabled()) {
+          pipeline.emplace_back(
+              makeNewPlacementAwareFusionStrategy(gpu_enabled_, "pre_dot"));
+          pipeline.emplace_back(
+              makeNewPlacementAwareFusionStrategy(gpu_enabled_, "dot"));
+        }
         pipeline.emplace_back(
             makeNewPlacementAwareFusionStrategy(gpu_enabled_, "base"));
         pipeline.emplace_back(
             makeNewPlacementAwareFusionStrategy(gpu_enabled_, "stitch"));
       } else {
+        pipeline.emplace_back(
+            makeNewPlacementAwareFusionStrategy(gpu_enabled_, "sparse_base"));
         // Do some basic fusion first.
         pipeline.emplace_back(
             makeNewPlacementAwareFusionStrategy(gpu_enabled_, "stitch_base"));
@@ -527,6 +746,10 @@ struct DiscFusionPass : public DiscFusionPassBase<DiscFusionPass> {
             makeNewPlacementAwareFusionStrategy(gpu_enabled_, "stitch"));
         pipeline.emplace_back(
             makeNewPlacementAwareFusionStrategy(gpu_enabled_, "base"));
+        if (useTransformSchedule()) {
+          pipeline.emplace_back(makeNewPlacementAwareFusionStrategy(
+              gpu_enabled_, "transform_based"));
+        }
       }
     }
     return pipeline;
@@ -548,12 +771,15 @@ struct DiscFusionPass : public DiscFusionPassBase<DiscFusionPass> {
       shapeAnalysisPtr.reset(new ShapeConstraintIRAnalysis(func));
     } else {
       shapeAnalysisPtr.reset(new ShapeAnalysisDeprecated{func});
-      static_cast<ShapeAnalysisDeprecated*>(shapeAnalysisPtr.get())->run();
+      if (failed(static_cast<ShapeAnalysisDeprecated*>(shapeAnalysisPtr.get())
+                     ->run())) {
+        signalPassFailure();
+      }
     }
 
     // process each block and do fusion within a block.
-    tensorflow::ReadInt64FromEnvVar("disc_debug_max_fusion_numbers_", INT_MIN,
-                                    &disc_debug_max_fusion_numbers_);
+    tensorflow::ReadInt64FromEnvVar("DISC_DEBUG_MAX_FUSION_NUMBER", INT_MIN,
+                                    &disc_debug_max_fusion_number_);
     FusionPipeline pipeline = makeFusionPipeline();
     int64_t fusion_pattern_number = 0;
     for (Block* block : blocks) {
@@ -618,8 +844,8 @@ struct DiscFusionPass : public DiscFusionPassBase<DiscFusionPass> {
 
   bool ApplyFusionPlan(FusionPlan& plan) {
     for (FusionPattern& pattern : plan) {
-      if (disc_debug_max_fusion_numbers_ != INT_MIN) {
-        if (applied_fusion_numbers_ + 1 > disc_debug_max_fusion_numbers_) {
+      if (disc_debug_max_fusion_number_ != INT_MIN) {
+        if (applied_fusion_numbers_ + 1 > disc_debug_max_fusion_number_) {
           llvm::errs() << "[Debug] Skip fusion " << applied_fusion_numbers_
                        << "\n";
           continue;
@@ -663,7 +889,7 @@ struct DiscFusionPass : public DiscFusionPassBase<DiscFusionPass> {
         }
       }
       // Dump fusion op for debugging.
-      if (disc_debug_max_fusion_numbers_ != INT_MIN) {
+      if (disc_debug_max_fusion_number_ != INT_MIN) {
         llvm::errs() << "[Debug] Fusion " << applied_fusion_numbers_ << ":\n";
         fusion->dump();
       }
@@ -682,7 +908,7 @@ struct DiscFusionPass : public DiscFusionPassBase<DiscFusionPass> {
 
  private:
   int64_t applied_fusion_numbers_ = 0;
-  int64_t disc_debug_max_fusion_numbers_;
+  int64_t disc_debug_max_fusion_number_;
 };
 
 }  // namespace

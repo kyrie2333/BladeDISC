@@ -9,7 +9,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "tensorflow/compiler/mlir/disc/tools/disc-replay/disc_interpreter.h"
+#include "mlir/disc/tools/disc-replay/disc_interpreter.h"
 
 #include <dlfcn.h>
 
@@ -31,16 +31,17 @@ tensorflow::Status DiscInterpreter::Compile(
 
   // compile input proto to executable file
   tensorflow::DeviceType device_type(input.options().device_type());
-  auto* compiler_wrapper =
-      tensorflow::tao::CompilerBase::GetCompilerForDevice(device_type)
-          .ValueOrDie();
+  auto status_or =
+      tensorflow::tao::CompilerBase::GetCompilerForDevice(device_type);
+  if (!status_or.ok()) return status_or.status();
+  auto* compiler_wrapper = status_or.value();
   TF_RETURN_IF_ERROR(compiler_wrapper->Compile(input, tmp_file));
   result.output_fname = tmp_file + ".so";
   result.meta_fname = tmp_file + ".so.pbtxt";
   TF_RETURN_IF_ERROR(GetEntryFunc(result.output_fname, result.entry_func));
   InitExecCUDAContext(result.meta_fname);
 
-  return tensorflow::Status::OK();
+  return tsl::OkStatus();
 }
 
 tensorflow::Status BindInputs(const std::vector<tensorflow::Tensor>& tensors,
@@ -76,7 +77,7 @@ tensorflow::Status BindInputs(const std::vector<tensorflow::Tensor>& tensors,
     }
 #endif
   }
-  return tensorflow::Status::OK();
+  return tsl::OkStatus();
 }
 
 tensorflow::Status DiscInterpreter::Run(
@@ -95,7 +96,7 @@ tensorflow::Status DiscInterpreter::Run(
   TF_RETURN_IF_ERROR(BindInputs(tensors, placements, *exec_ctx.get()));
   void* ctx_struct[] = {exec_ctx.get(), ral_func_ptr_};
   result.entry_func(ctx_struct);
-  return tensorflow::Status::OK();
+  return tsl::OkStatus();
 }
 
 void DiscInterpreter::InitExecCUDAContext(const std::string& meta_fname) {
@@ -127,7 +128,7 @@ tensorflow::Status DiscInterpreter::GetEntryFunc(
   }
   entry_func = (func_t)entry_func_ptr;
   CHECK_NOTNULL(entry_func);
-  return tensorflow::Status::OK();
+  return tsl::OkStatus();
 }
 
 }  //  namespace replay

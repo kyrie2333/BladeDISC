@@ -9,7 +9,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"       // TF:llvm-project
+#include "mlir/Dialect/Arith/IR/Arith.h"                 // TF:llvm-project
 #include "mlir/Dialect/Func/IR/FuncOps.h"                // TF:llvm-project
 #include "mlir/Dialect/MemRef/IR/MemRef.h"               // TF:llvm-project
 #include "mlir/IR/Location.h"                            // TF:llvm-project
@@ -19,7 +19,7 @@
 #include "mlir/Transforms/DialectConversion.h"           // TF:llvm-project
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"  // TF:llvm-project
 #include "mlir/Transforms/Passes.h"                      // TF:llvm-project
-#include "transforms/PassDetail.h"
+#include "mlir/disc/transforms/PassDetail.h"
 
 namespace mlir {
 namespace disc_ral {
@@ -44,24 +44,27 @@ struct UnhandledAtomicRMWConverter
 
   LogicalResult matchAndRewrite(memref::AtomicRMWOp op,
                                 PatternRewriter& rewriter) const override {
+    Type elemTy = op.getType();
+    bool isLowBits = elemTy.getIntOrFloatBitWidth() < 32;
+
     // Currently, we only deal with atomic mulf operation. More operations can
     // be supported easily here.
-    if (op.kind() != arith::AtomicRMWKind::mulf) {
+    if (op.getKind() != arith::AtomicRMWKind::mulf and not isLowBits) {
       return failure();
     }
 
     Location loc = op.getLoc();
     memref::GenericAtomicRMWOp genericOp =
-        rewriter.create<memref::GenericAtomicRMWOp>(loc, op.memref(),
-                                                    op.indices());
+        rewriter.create<memref::GenericAtomicRMWOp>(loc, op.getMemref(),
+                                                    op.getIndices());
     OpBuilder bodyBuilder =
         OpBuilder::atBlockEnd(genericOp.getBody(), rewriter.getListener());
 
     Value lhs = genericOp.getCurrentValue();
-    Value rhs = op.value();
-    Value reductionOp = getReductionOp(op.kind(), bodyBuilder, loc, lhs, rhs);
+    Value rhs = op.getValue();
+    Value reductionOp =
+        getReductionOp(op.getKind(), bodyBuilder, loc, lhs, rhs);
     bodyBuilder.create<memref::AtomicYieldOp>(loc, reductionOp);
-
     rewriter.replaceOp(op, genericOp.getResult());
     return success();
   }

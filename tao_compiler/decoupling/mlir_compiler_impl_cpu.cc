@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "tensorflow/compiler/decoupling/mlir_compiler_impl_cpu.h"
+#include "decoupling/mlir_compiler_impl_cpu.h"
 
 namespace tensorflow {
 namespace tao {
@@ -25,7 +25,7 @@ Status CompilerMLIR_CPU::FillDeviceInfo(
   // TODO(kevin.zwy): add an cpu_info field to store #cores configuration.
   options.mode = mlir::disc_ral::CodeGenMode::kCpuCentric;
 
-  return Status::OK();
+  return tsl::OkStatus();
 }
 
 }  // namespace tao

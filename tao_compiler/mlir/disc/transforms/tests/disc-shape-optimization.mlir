@@ -92,7 +92,8 @@ func.func @main(%arg0 : tensor<?xf32>, %arg1 : tensor<?xf32>, %arg2 : tensor<?xf
 // CHECK-LABEL: main
 // CHECK-SAME: (%[[ARG0:.*]]: tensor<i1>, %[[ARG1:.*]]: tensor<?xf32, [@[[S0:.*]]]>, %[[ARG2:.*]]: tensor<?xf32, [@[[S0]]]>) -> tensor<?xf32, [@[[S0]]]>
 func.func @main(%arg0: tensor<i1>, %arg1: tensor<?xf32>, %arg2: tensor<?xf32>) -> tensor<?xf32> {
-  // CHECK: %[[T0:.*]] = "mhlo.select"(%[[ARG0]], %[[ARG1]], %[[ARG2]])
+  // CHECK: %[[T0:.*]] = mhlo.select
+  // CHECK-SAME: %[[ARG0]], %[[ARG1]], %[[ARG2]]
   // CHECK: return %[[T0]] : tensor<?xf32, [@[[S0]]]>
   %0 = "mhlo.select"(%arg0, %arg1, %arg2)  : (tensor<i1>, tensor<?xf32>, tensor<?xf32>) -> tensor<?xf32>
   func.return %0 : tensor<?xf32>
@@ -104,7 +105,8 @@ func.func @main(%arg0: tensor<i1>, %arg1: tensor<?xf32>, %arg2: tensor<?xf32>) -
 // CHECK-LABEL: main
 // CHECK-SAME: (%[[ARG0:.*]]: tensor<?xi1, [@[[S0:.*]]]>, %[[ARG1:.*]]: tensor<?xf32, [@[[S0]]]>, %[[ARG2:.*]]: tensor<?xf32, [@[[S0]]]>) -> tensor<?xf32, [@[[S0]]]>
 func.func @main(%arg0: tensor<?xi1>, %arg1: tensor<?xf32>, %arg2: tensor<?xf32>) -> tensor<?xf32> {
-  // CHECK: %[[T0:.*]] = "mhlo.select"(%[[ARG0]], %[[ARG1]], %[[ARG2]])
+  // CHECK: %[[T0:.*]] = mhlo.select
+  // CHECK-SAME: %[[ARG0]], %[[ARG1]], %[[ARG2]]
   // CHECK: return %[[T0]] : tensor<?xf32, [@[[S0]]]>
   %0 = "mhlo.select"(%arg0, %arg1, %arg2)  : (tensor<?xi1>, tensor<?xf32>, tensor<?xf32>) -> tensor<?xf32>
   func.return %0 : tensor<?xf32>
@@ -189,6 +191,24 @@ func.func @main(%arg0: tensor<?x?x?xf32>) -> (index, index) {
 
 // -----
 
+// Test arith.cmpi + arith::trunci
+// CHECK-LABEL: main
+func.func @main(%arg0: tensor<?x?x?xf32>) -> (index) {
+  // CHECK: %c0 = arith.constant 0 : index
+  // CHECK: return %c0 : index
+  %c-1 = arith.constant -1 : i32
+  %c0 = arith.constant 0 : index
+  %c1 = arith.constant 1 : index
+  %0 = tensor.dim %arg0, %c0 : tensor<?x?x?xf32>
+  %1 = arith.index_cast %0 : index to i64
+  %2 = arith.trunci %1 : i64 to i32
+  %3 = arith.cmpi eq, %2, %c-1 : i32
+  %4 = arith.select %3, %c1, %c0 : index
+  return %4 : index
+}
+
+// -----
+
 // Test arith.cmpi + tie_shape
 // CHECK-LABEL: main
 func.func @main(%arg0: tensor<?x?x?xf32>, %arg1: tensor<2xindex>) -> (tensor<?x?xf32>, index) {
@@ -267,6 +287,34 @@ func.func @main(%arg0: tensor<?x?x?xf32>) -> tensor<?x?xf32> {
 
 // -----
 
+// Regression test: disc_shape.tie_product_equal
+
+// CHECK-LABEL: @main
+// CHECK-SAME: (%[[ARG0:.*]]: tensor<?x?x?xf32, [@[[S0:.*]], @[[S1:.*]], @[[S2:.*]]]>) -> tensor<?x?xf32, [@[[S3:.*]], @[[S4:.*]]]>
+func.func @main(%arg0: tensor<?x?x?xf32>) -> tensor<?x?xf32> {
+  %c2 = arith.constant 2 : index
+  %c1 = arith.constant 1 : index
+  %c0 = arith.constant 0 : index
+  %2 = tensor.dim %arg0, %c0 : tensor<?x?x?xf32>
+  %3 = tensor.dim %arg0, %c1 : tensor<?x?x?xf32>
+  %4 = tensor.dim %arg0, %c2 : tensor<?x?x?xf32>
+  %5 = arith.addi %3, %4 : index
+  %6 = arith.addi %2, %3 : index
+  %7 = tensor.from_elements %5, %6 : tensor<2xindex>
+  %8 = "mhlo.dynamic_reshape"(%arg0, %7) : (tensor<?x?x?xf32>, tensor<2xindex>) -> tensor<?x?xf32>
+  return %8 : tensor<?x?xf32>
+}
+
+// CHECK-LABEL: @shape_constraint_graph
+// CHECK-DAG: %[[TT0:.*]] = "disc_shape.dim"() {name = @[[S0]]} : () -> index
+// CHECK-DAG: %[[TT1:.*]] = "disc_shape.dim"() {name = @[[S1]]} : () -> index
+// CHECK-DAG: %[[TT2:.*]] = "disc_shape.dim"() {name = @[[S2]]} : () -> index
+// CHECK-DAG: %[[TT3:.*]] = "disc_shape.dim"() {name = @[[S3]]} : () -> index
+// CHECK-DAG: %[[TT4:.*]] = "disc_shape.dim"() {name = @[[S4]]} : () -> index
+// CHECK-DAG: "disc_shape.tie_product_equal"(%[[TT3]], %[[TT4]], %[[TT0]], %[[TT1]], %[[TT2]])
+
+// -----
+
 // regression test: non-shape-tensor from_element op
 
 // CHECK-LABEL: @main
@@ -292,14 +340,14 @@ module {
     return %0 : tensor<?x?xf32, [@S0, @S1]>
   }
   // Test symbols dim ops 2/3 are not removed (used in kDiscSymbolicDimAttr)
-  // CHECK-DAG: "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S0", value = -1 : i64}
-  // CHECK-DAG: "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S1", value = -1 : i64}
-  // CHECK-DAG: "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S2", value = -1 : i64}
-  // CHECK-DAG: "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S3", value = -1 : i64}
-  "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S0", value = -1 : i64} : () -> ()
-  "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S1", value = -1 : i64} : () -> ()
-  "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S2", value = -1 : i64} : () -> ()
-  "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S3", value = -1 : i64} : () -> ()
+  // CHECK-DAG: "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S0", value = -9223372036854775808 : i64}
+  // CHECK-DAG: "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S1", value = -9223372036854775808 : i64}
+  // CHECK-DAG: "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S2", value = -9223372036854775808 : i64}
+  // CHECK-DAG: "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S3", value = -9223372036854775808 : i64}
+  "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S0", value = -9223372036854775808 : i64} : () -> ()
+  "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S1", value = -9223372036854775808 : i64} : () -> ()
+  "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S2", value = -9223372036854775808 : i64} : () -> ()
+  "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S3", value = -9223372036854775808 : i64} : () -> ()
   func.func @shape_constraint_graph() {
     return
   }
@@ -321,13 +369,13 @@ module {
     %1 = tensor.cast %0 : tensor<?x?xf32, [@S2, @S3]> to tensor<?x?xf32, [@S0, @S1]>
     return %1 : tensor<?x?xf32, [@S0, @S1]>
   }
-  // CHECK-DAG: "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S0", value = -1 : i64}
-  // CHECK-DAG: "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S1", value = -1 : i64}
+  // CHECK-DAG: "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S0", value = -9223372036854775808 : i64}
+  // CHECK-DAG: "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S1", value = -9223372036854775808 : i64}
   // CHECK-NOT: "disc_shape.SymbolicDim"()
-  "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S0", value = -1 : i64} : () -> ()
-  "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S1", value = -1 : i64} : () -> ()
-  "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S2", value = -1 : i64} : () -> ()
-  "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S3", value = -1 : i64} : () -> ()
+  "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S0", value = -9223372036854775808 : i64} : () -> ()
+  "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S1", value = -9223372036854775808 : i64} : () -> ()
+  "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S2", value = -9223372036854775808 : i64} : () -> ()
+  "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S3", value = -9223372036854775808 : i64} : () -> ()
   func.func @shape_constraint_graph() {
     return
   }
@@ -568,5 +616,36 @@ func.func @main(%arg0: tensor<?x?xf32>, %arg1: index, %arg2: index, %arg3: tenso
   %3 = tensor.from_elements %0, %0 : tensor<2xindex>
   %4 = "mhlo.dynamic_pad"(%arg0, %arg3, %1, %2, %3) : (tensor<?x?xf32>, tensor<f32>, tensor<2xindex>, tensor<2xindex>, tensor<2xindex>) -> tensor<?x?xf32>
   return %4 : tensor<?x?xf32>
+}
+
+// -----
+
+// test pattern:
+// convert:
+//   dyn_reshape(tensor<8xf32>) -> tensor<1x?xf32>
+// to:
+//   dyn_reshape(tensor<8xf32>) -> tensor<1x8xf32>
+
+// CHECK-LABEL: @main
+// CHECK-SAME: (%[[ARG0:.*]]: tensor<8xf32>, %[[ARG1:.*]]: tensor<2xindex>) -> tensor<1x8xf32>
+func.func @main(%arg0: tensor<8xf32>, %arg1: tensor<2xindex>) -> (tensor<1x?xf32>) {
+  // CHECK: mhlo.reshape
+  %0 = "mhlo.dynamic_reshape"(%arg0, %arg1) : (tensor<8xf32>, tensor<2xindex>) -> tensor<1x?xf32>
+  return %0 : tensor<1x?xf32>
+}
+
+// -----
+
+// Test mhlo.compute_reshape_shape
+
+// CHECK-LABEL: @main
+// CHECK-SAME: (%[[ARG0:.*]]: tensor<?x?xf32, [@S0, @S1]>, %[[ARG1:.*]]: tensor<?x?x?xf32, [@S2, @S3, @S4]>, %[[ARG2:.*]]: index, %[[ARG3:.*]]: tensor<3xindex>)
+// CHECK-SAME: tensor<?x?x?xf32, [@S2, @S3, @S4]>
+func.func @main(%arg0: tensor<?x?xf32>, %arg1: tensor<?x?x?xf32>, %arg2: index, %arg3: tensor<3xindex>) -> tensor<?x?x?xf32> {
+  %0 = shape.shape_of %arg1 : tensor<?x?x?xf32> -> tensor<3xindex>
+  %1 = mhlo.compute_reshape_shape %arg2, %0 : (index, tensor<3xindex>) -> tensor<3xindex>
+  %2 = "mhlo.dynamic_reshape"(%arg0, %1)
+      : (tensor<?x?xf32>, tensor<3xindex>) -> tensor<?x?x?xf32>
+  func.return %2 : tensor<?x?x?xf32>
 }
 

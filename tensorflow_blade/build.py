@@ -43,11 +43,12 @@ from common_setup import (
     execute,
     which,
     safe_run,
-    symlink_disc_files,
+    symlink_disc_files_deprecated,
     add_ral_link_if_not_exist,
     symlink_dir,
     get_source_root_dir,
-    internal_root_dir
+    internal_root_dir,
+    num_make_jobs,
 )
 from tao_common import (
     git_branch,
@@ -110,7 +111,7 @@ def check(args):
 
 
 def link_files(args):
-    symlink_disc_files(args.platform_alibaba)
+    symlink_disc_files_deprecated(args.platform_alibaba)
     add_ral_link_if_not_exist()
     if args.platform_alibaba:
         excludes = ['ci_build']
@@ -203,7 +204,8 @@ def configure(args):
                 _action_env("BLADE_WITH_TENSORRT", "0")
 
             if args.platform_alibaba and not args.skip_hie:
-                _config("hie")
+                logger.warning("HIE will be disabled temporarily.")
+                # _config("hie")
 
             if not args.skip_disc:
                 _config("disc_cuda")
@@ -230,6 +232,8 @@ def configure(args):
         # Working around bazel #10327
         _action_env("BAZEL_LINKOPTS", os.environ.get("BAZEL_LINKOPTS", ""))
         _action_env("BAZEL_LINKLIBS", os.environ.get("BAZEL_LINKLIBS", "-lstdc++"))
+        # limit make jobs.
+        _action_env("DISC_FOREIGN_MAKE_JOBS", num_make_jobs())
     logger.info("Writing to .bazelrc_gen done.")
 
     # This is a hack when cmake generated pb.h & pb.cc files will affect bazel build

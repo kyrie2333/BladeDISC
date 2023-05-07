@@ -13,15 +13,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "mlir-hlo/Dialect/lhlo/IR/lhlo_ops.h"
+#include "lhlo/IR/lhlo_ops.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/GPU/Transforms/Utils.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/Pass/Pass.h"
-#include "tensorflow/compiler/mlir/disc/transforms/PassDetail.h"
-#include "tensorflow/compiler/mlir/disc/transforms/fusion_utils.h"
+#include "mlir/disc/transforms/PassDetail.h"
+#include "mlir/disc/transforms/fusion_utils.h"
 
 namespace mlir {
 namespace disc_ral {
@@ -85,10 +85,10 @@ LogicalResult AssignKernelNamePass::processLaunchFuncOp(LaunchFuncOp op,
   auto func = m.lookupSymbol<GPUFuncOp>(op.getKernelName());
   func.setName(name);
   OpBuilder b(op);
-  auto newOp =
-      b.create<LaunchFuncOp>(op.getLoc(), func, op.getGridSizeOperandValues(),
-                             op.getBlockSizeOperandValues(),
-                             op.dynamicSharedMemorySize(), op.operands());
+  auto newOp = b.create<LaunchFuncOp>(
+      op.getLoc(), func, op.getGridSizeOperandValues(),
+      op.getBlockSizeOperandValues(), op.getDynamicSharedMemorySize(),
+      op.getKernelOperands());
   op.erase();
   return success();
 }

@@ -14,10 +14,18 @@ import os
 import errno
 import subprocess
 import sys
+import torch
 import venv
 
-from common_setup import running_on_ci, remote_cache_token, which
-from common_setup import is_aarch64
+from common_setup import (
+    running_on_ci,
+    remote_cache_token,
+    which,
+    num_make_jobs,
+    is_aarch64,
+    build_tao_compiler_add_flags_platform_alibaba_cached,
+    test_tao_compiler_add_flags_platform_alibaba_cached,
+)
 from torch_blade_build import TorchBladeBuild, get_fullpath_or_create
 
 cwd = os.path.dirname(os.path.abspath(__file__))
@@ -41,13 +49,27 @@ def _symlink_force(target, link_name):
 
 
 class BazelBuild(TorchBladeBuild):
+
+    def pybind11_cflags(self):
+        # see https://github.com/pytorch/pytorch/blob/fe87ae692f813934d1a74d000fd1e3b546c27ae2/torch/utils/cpp_extension.py#L515
+        common_cflags = []
+        if self.torch_major_version == 1 and self.torch_minor_version <= 6:
+            return common_cflags
+        for pname in ["COMPILER_TYPE", "STDLIB", "BUILD_ABI"]:
+            pval = getattr(torch._C, f"_PYBIND11_{pname}")
+            if pval is not None:
+                common_cflags.append(f'-DPYBIND11_{pname}=\\"{pval}\\"')
+        return common_cflags
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.targets = [
-            "@org_tensorflow//tensorflow/compiler/mlir/xla/ral:libral_base_context.so",
-            "//src:libtorch_blade.so",
-            "//src:_torch_blade.so",
+            "@org_disc_compiler//mlir/xla/ral:libral_base_context.so",
+            "//pytorch_blade:libtorch_blade.so",
+            "//pytorch_blade:_torch_blade.so",
             "//tests/mhlo/torch-mlir-opt:torch-mlir-opt",
+            "//tests/torchscript:shape_analysis_tool",
+            "//tests/torch-disc-pdll:torch-disc-pdll",
         ]
 
         torch_major_version, torch_minor_version = self.torch_version.split(".")[:2]
@@ -63,7 +85,9 @@ class BazelBuild(TorchBladeBuild):
             "--action_env BAZEL_LINKLIBS=-lstdc++",
             "--action_env CC={}".format(which("gcc")),
             "--action_env CXX={}".format(which("g++")),
+            "--action_env DISC_FOREIGN_MAKE_JOBS={}".format(num_make_jobs())
         ]
+
         remote_cache = remote_cache_token()
         if remote_cache:
             self.disc_base_opts += ["--remote_cache={}".format(remote_cache)]
@@ -77,9 +101,10 @@ class BazelBuild(TorchBladeBuild):
             "--copt=-DPYTORCH_MINOR_VERSION={}".format(torch_minor_version),
             "--copt=-DTORCH_BLADE_CUDA_VERSION={}".format(self.cuda_version),
             "--action_env TORCH_BLADE_TORCH_INSTALL_PATH={}".format(self.torch_dir),
-        ]
+        ] + ['--copt={}'.format(cflag) for cflag in self.pybind11_cflags()]
 
-        if self.torch_major_version >= 1 and self.torch_minor_version >= 12:
+        if (self.torch_major_version, self.torch_minor_version) == (1, 12):
+            # LTC features only tested on torch==1.12.0+cu113 for now
             self.torch_extra_opts.append("--config=torch_ltc_disc_backend")
         if self.is_debug:
             self.torch_extra_opts.append("--config=torch_debug")
@@ -94,15 +119,21 @@ class BazelBuild(TorchBladeBuild):
             )
             self.torch_extra_opts += [
                 "--action_env TENSORRT_INSTALL_PATH={}".format(self.tensorrt_dir),
-                "--action_env NVCC={}".format(which("nvcc"))
+                "--action_env NVCC={}".format(which("nvcc")),
             ]
 
         # ----------------------------------------------------------------------- #
         # ---------------    Configurations Settings: configs    ---------------- #
         # ----------------------------------------------------------------------- #
-        self.configs = ["--config=torch_cxx11abi_{}".format(int(self.GLIBCXX_USE_CXX11_ABI))]
+        self.configs = [
+            "--config=torch_cxx11abi_{}".format(int(self.GLIBCXX_USE_CXX11_ABI))
+        ]
         if self.cuda_available:
             self.configs.append("--config=torch_cuda")
+
+        elif self.dcu_rocm_available:
+            self.configs.append("--config=torch_dcu_rocm")
+
         else:
             if is_aarch64():
                 self.configs += ["--config=torch_aarch64"]
@@ -113,10 +144,20 @@ class BazelBuild(TorchBladeBuild):
             self.configs += ["--config=blade_gemm"]
 
         if self.build_hie:
-            self.configs += ["--config=hie"]
+            print("[WARNIGN] HIE will be disabled temporarily.")
+            # self.configs += ["--config=hie"]
+
+        if self.skip_compute_intensive_fusion:
+            self.configs += ["--config=skip_compute_intensive_fusion"]
 
         if running_on_ci():
             self.configs += ["--config=ci_build"]
+
+        root_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
+        self.configs += [
+            build_tao_compiler_add_flags_platform_alibaba_cached(root_dir, ""),
+            test_tao_compiler_add_flags_platform_alibaba_cached(root_dir, "")
+        ]
 
         # ----------------------------------------------------------------------- #
         # --------------------   Settings for Quantization   -------------------- #
@@ -127,17 +168,28 @@ class BazelBuild(TorchBladeBuild):
         # set to 1.8.0
         # note: If we use backend (such as trt) to do calibration and get the
         # quantization engine, this limitation should not be set.
-        is_enable_quantization = \
-            self.torch_major_version == 1 and self.torch_minor_version >= 8 \
+        is_enable_quantization = (
+            self.torch_major_version == 1
+            and self.torch_minor_version >= 8
             or self.torch_major_version > 1
+        )
         if is_enable_quantization:
             self.torch_extra_opts.append("--config=torch_enable_quantization")
+
+        # ----------------------------------------------------------------------- #
+        # --------------------   Settings for Neural Engine   ------------------- #
+        # ----------------------------------------------------------------------- #
+        if self.build_neural_engine:
+            print("=================enable neural engine=============")
+            self.torch_extra_opts.append("--config=torch_enable_neural_engine")
 
         self.shell_setting = "set -e; set -o pipefail; "
         # Workaround: this venv ensure that $(/usr/bin/env python) is evaluated to python3
         venv.create(".bazel_pyenv", clear=True)
-        self.build_cmd = "source .bazel_pyenv/bin/activate; bazel build"
+        self.build_cmd = "source .bazel_pyenv/bin/activate; bazel build --verbose_failures"
         self.test_cmd = "source .bazel_pyenv/bin/activate; bazel test"
+        if running_on_ci():
+            self.test_cmd += " --test_output=errors"
 
     def run(self, extdir=None, srcdir=None, build_temp=None):
         srcdir = get_fullpath_or_create(
@@ -156,16 +208,24 @@ class BazelBuild(TorchBladeBuild):
         if not self.skip_disc_cmd_build:
             bazel_disc_build_cmd = " ".join(
                 [self.shell_setting, self.build_cmd]
-                + self.disc_base_opts + self.configs
-                + ["--compilation_mode=opt",
-                   "@org_tensorflow//tensorflow/compiler/mlir/disc:disc_compiler_main"]
+                + self.disc_base_opts
+                + self.configs
+                + [
+                    "--compilation_mode=opt",
+                    "--define is_torch_disc=false",  # still use mhlo within TF to build compiler main
+                    "@org_disc_compiler//mlir/disc:disc_compiler_main",
+                ]
             )
-            subprocess.check_call(bazel_disc_build_cmd, shell=True, env=env, executable="/bin/bash")
+            subprocess.check_call(
+                bazel_disc_build_cmd, shell=True, env=env, executable="/bin/bash"
+            )
 
         # 2. build other targets, support both debug mode & opt mode compilation
         bazel_cmd = " ".join(
             [self.shell_setting, self.build_cmd]
-            + self.disc_base_opts + self.torch_extra_opts + self.configs
+            + self.disc_base_opts
+            + self.torch_extra_opts
+            + self.configs
         )
         with open("debug_bazel.sh", "w") as f:
             f.write("#!/bin/bash\n")
@@ -202,14 +262,47 @@ class BazelBuild(TorchBladeBuild):
         env["LD_LIBRARY_PATH"] = ld_library_path
         env["GCC_HOST_COMPILER_PATH"] = env.get("GCC_HOST_COMPILER_PATH", which("gcc"))
 
-        self.test_suites = ["//tests/mhlo/...", "//src:torch_blade_test_suite"]
+        self.test_suites = [
+            "//tests/mhlo/...",
+            "//pytorch_blade:torch_blade_test_suite",
+            "//tests/torch-disc-pdll/tests/...",
+        ]
+
+        if (self.torch_major_version, self.torch_minor_version) > (1, 6):
+            # torchscript graph ir parser changed after torch 1.6.
+            # We will not test torchscript graph ir before torch 1.6
+            self.test_suites.append("//tests/torchscript/...")
 
         test_cmd = " ".join(
             [self.shell_setting, self.test_cmd]
-            + self.disc_base_opts + self.torch_extra_opts
-            + self.configs + self.test_suites
+            + self.disc_base_opts
+            + self.torch_extra_opts
+            + self.configs
+            + self.test_suites
         )
         subprocess.check_call(test_cmd, shell=True, env=env, executable="/bin/bash")
+
+        self.disc_test_suites = [
+            "//tests/disc_mlir/...",
+        ]
+        disc_test_extra_opts = ['--config=disc_test']
+        if self.is_debug:
+            # The config opt disc_test_debug is not rational but without it we will run into the following issue:
+            # In file included from /usr/include/stdint.h:25,
+            #                  from /opt/rh/devtoolset-9/root/usr/lib/gcc/x86_64-redhat-linux/9/include/stdint.h:9,
+            #                  from external/boringssl/src/include/openssl/base.h:60,
+            #                  from external/boringssl/err_data.c:17:
+            # /usr/include/features.h:330:4: error: #warning _FORTIFY_SOURCE requires compiling with optimization (-O) [-Werror=cpp]
+            disc_test_extra_opts.append("--config=disc_test_debug")
+
+        disc_test_cmd = " ".join(
+            [self.shell_setting, self.test_cmd]
+            + self.disc_base_opts
+            + disc_test_extra_opts
+            + self.configs
+            + self.disc_test_suites
+        )
+        subprocess.check_call(disc_test_cmd, shell=True, env=env, executable="/bin/bash")
 
 
 if __name__ == "__main__":

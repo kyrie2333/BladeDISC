@@ -21,6 +21,7 @@ _BLADE_GEMM_LIBRARY_KERNELS = "BLADE_GEMM_LIBRARY_KERNELS"
 _BLADE_GEMM_TVM = "BLADE_GEMM_TVM"
 _BLADE_GEMM_ROCM_PATH = "BLADE_GEMM_ROCM_PATH"
 _DISC_TARGET_CPU_ARCH = "DISC_TARGET_CPU_ARCH"
+_DISC_FOREIGN_MAKE_JOBS = "DISC_FOREIGN_MAKE_JOBS"
 
 def _blade_disc_helper_impl(repository_ctx):
     repository_ctx.template("build_defs.bzl", Label("//bazel/blade_disc_helper:build_defs.bzl.tpl"), {
@@ -39,11 +40,10 @@ def _blade_disc_helper_impl(repository_ctx):
         "%{DISC_BUILD_IP}": get_host_environ(repository_ctx, _DISC_BUILD_IP, ""),
         "%{DISC_BUILD_TIME}": get_host_environ(repository_ctx, _DISC_BUILD_TIME, ""),
         "%{BLADE_GEMM_NVCC}": get_host_environ(repository_ctx, _BLADE_GEMM_NVCC, ""),
-        "%{BLADE_GEMM_NVCC_ARCHS}": get_host_environ(repository_ctx, _BLADE_GEMM_NVCC_ARCHS, ""),
-        "%{BLADE_GEMM_LIBRARY_KERNELS}": get_host_environ(repository_ctx, _BLADE_GEMM_LIBRARY_KERNELS, ""),
         "%{BLADE_GEMM_TVM}": get_host_environ(repository_ctx, _BLADE_GEMM_TVM, ""),
         "%{BLADE_GEMM_ROCM_PATH}": get_host_environ(repository_ctx, _BLADE_GEMM_ROCM_PATH, ""),
         "%{DISC_TARGET_CPU_ARCH}": get_host_environ(repository_ctx, _DISC_TARGET_CPU_ARCH, ""),
+        "%{DISC_FOREIGN_MAKE_JOBS}": get_host_environ(repository_ctx, _DISC_FOREIGN_MAKE_JOBS, ""),
     })
 
     repository_ctx.template("BUILD", Label("//bazel/blade_disc_helper:BUILD.tpl"), {
@@ -72,5 +72,6 @@ blade_disc_helper_configure = repository_rule(
         _BLADE_GEMM_TVM,
         _BLADE_GEMM_ROCM_PATH,
         _DISC_TARGET_CPU_ARCH,
+        _DISC_FOREIGN_MAKE_JOBS,
     ],
 )

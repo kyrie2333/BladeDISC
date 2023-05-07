@@ -1,8 +1,9 @@
 // RUN: disc-opt --mhlo-place-ops -split-input-file %s | FileCheck %s
 
+// CHECK-LABEL: @main
 func.func @main(%arg : tensor<i64>) -> tensor<i64> attributes {tf.entry_function = {input_placements = "cpu", inputs = "input0", output_placements = "cpu", outputs = "output0"}}  {
-  // CHECK: "mhlo.tuple"({{.*}}) {disc.device = ["cpu"]} : (tensor<i64>) -> tuple<tensor<i64>>
-  // CHECK: "mhlo.get_tuple_element"({{.*}}) {disc.device = "cpu", index = 0 : i32} : (tuple<tensor<i64>>) -> tensor<i64>
+  // CHECK: mhlo.tuple {{.*}} {disc.device = ["cpu"]}
+  // CHECK: mhlo.get_tuple_element {{.*}} {disc.device = "cpu"} : (tuple<tensor<i64>>) -> tensor<i64>
   %tuple = "mhlo.tuple"(%arg) : (tensor<i64>) -> tuple<tensor<i64>>
   %element = "mhlo.get_tuple_element"(%tuple) {index = 0 : i32} : (tuple<tensor<i64>>) -> tensor<i64>
   return %element : tensor<i64>
@@ -10,6 +11,7 @@ func.func @main(%arg : tensor<i64>) -> tensor<i64> attributes {tf.entry_function
 
 // -----
 
+// CHECK-LABEL: @main
 func.func @main(%arg0: tensor<?x8xf32>) -> tensor<?x24xf32> attributes {tf.entry_function = {input_placements = "cpu", inputs = "input0", output_placements = "cpu", outputs = "output0"}} {
   // CHECK: mhlo.constant
   // CHECK: disc.device = "cpu"
@@ -45,6 +47,7 @@ func.func @main(%arg0: tensor<?x8xf32>) -> tensor<?x24xf32> attributes {tf.entry
 
 // -----
 
+// CHECK-LABEL: @main
 func.func @main(%arg0: tensor<?x?x?xi32>, %arg1: tensor<?x6x2xi64>) -> tensor<?x6x?xi32> attributes {tf.entry_function = {input_placements = "cpu,cpu", inputs = "input0, input1", output_placements = "cpu", outputs = "output0"}} {
   // CHECK: tensor.from_elements
   // CHECK-NOT: disc.device = "gpu"
@@ -61,4 +64,123 @@ func.func @main(%arg0: tensor<?x?x?xi32>, %arg1: tensor<?x6x2xi64>) -> tensor<?x
   return %3 : tensor<?x6x?xi32>
 }
 
+// -----
+
+// Test for per_tensor_quantized_dynamic_conv
+
+// CHECK-LABEL: @main
+// CHECK-SAME: %[[INPUT:.*]]: tensor<?x?x?x?xi8>, %[[WEIGHT:.*]]: tensor<?x?x?x?xi8>,
+// CHECK-SAME: %[[PADDING:.*]]: tensor<4xf32>,
+func.func @main(%input: tensor<?x?x?x?xi8>, %weight: tensor<?x?x?x?xi8>, %padding : tensor<4xf32>,
+                %input_scale: tensor<f32>, %input_zero_point: tensor<i32>,
+                %weight_scale: tensor<f32>, %weight_zero_point: tensor<i32>,
+                %result_scale: tensor<f32>, %result_zero_point: tensor<i32>) -> tensor<?x?x?x?xi8>
+                    attributes {tf.entry_function = {
+                                  input_placements = "cpu,cpu,gpu,cpu,cpu,cpu,cpu,cpu,cpu",
+                                  inputs = "input0,input1,input2,input3,input4,input5,input6,input7,input8",
+                                  output_placements = "cpu", outputs = "output0"}} {
+  // CHECK: %[[HOST_PADDING:.*]] = "mhlo_disc.d2h"(%[[PADDING]])
+  // CHECK: %[[RefinedPadding:.*]] = mhlo.convert %[[HOST_PADDING]]
+  // CHECK-SAME: disc.shape_op = true
+  // CHECK: %[[OUT:.*]] = "mhlo_disc.quantized_dynamic_conv"
+  // CHECK-SAME: %[[RefinedPadding]]
+  %refined_padding = mhlo.convert %padding {disc.shape_op = true} : (tensor<4xf32>) -> tensor<4xi32>
+  %out = "mhlo_disc.quantized_dynamic_conv"(%input, %weight, %refined_padding,
+                                           %input_scale, %input_zero_point,
+                                           %weight_scale, %weight_zero_point,
+                                           %result_scale, %result_zero_point) {
+      use_symmetric = true,
+      axis = dense<[]> : tensor<0xi64>,
+      use_dynamic = false,
+      dimension_numbers = #mhlo.conv<raw
+        input_batch_dimension = 0,
+        input_feature_dimension = 1,
+        input_spatial_dimensions = [2, 3],
+        kernel_input_feature_dimension = 1,
+        kernel_output_feature_dimension = 0,
+        kernel_spatial_dimensions = [2, 3],
+        output_batch_dimension = 0,
+        output_feature_dimension = 1,
+        output_spatial_dimensions = [2, 3]
+      >,
+      batch_group_count = 1 : i64,
+      feature_group_count = 1 : i64,
+      rhs_dilation = dense<1> : tensor<2xi64>,
+      window_strides = dense<3> : tensor<2xi64>
+  } : (tensor<?x?x?x?xi8>, tensor<?x?x?x?xi8>, tensor<4xi32>,
+       tensor<f32>, tensor<i32>,
+       tensor<f32>, tensor<i32>,
+       tensor<f32>, tensor<i32>) -> tensor<?x?x?x?xi8>
+  return %out : tensor<?x?x?x?xi8>
+}
+
+// -----
+
+// Test 0 for mhlo_disc.custom_call_v2
+// CHECK-LABEL: @main
+// CHECK-SAME: (%[[ARG0:.*]]: tensor<?x?xf32>, %[[ARG1:.*]]: tensor<2xi32>)
+func.func @main(%arg0: tensor<?x?xf32>, %arg1: tensor<2xi32>) -> tensor<?x?xf32> attributes {tf.entry_function = {
+                                  input_placements = "cpu,gpu",
+                                  inputs = "input0,input1",
+                                  output_placements = "cpu", outputs = "output0"}} {
+  // CHECK: %[[T0:.*]] = "mhlo_disc.d2h"
+  // CHECK-SAME: %[[ARG1]]
+  // CHECK: %[[T1:.*]] = "mhlo_disc.d2h"
+  // CHECK-SAME: %[[ARG1]]
+  // CHECK: %[[T2:.*]] = mhlo.add
+  // CHECK-SAME: %[[T0]], %[[T1]]
+  // CHECK: %[[T3:.*]] = "mhlo_disc.h2d"(%[[ARG0]])
+  // CHECK: %[[T4:.*]] = "mhlo_disc.custom_call_v2"(%[[T3]], %[[T2]])
+  // CHECK-SAME: disc.device = "cpu"
+  // CHECK-NEXT: return
+  %0 = mhlo.add %arg1, %arg1 : tensor<2xi32>
+  %1 = "mhlo_disc.custom_call_v2"(%arg0, %0) {
+    call_target_name = "foo",
+    custom_attrs = {},
+    has_side_effect = false,
+    device = "h",
+    input_placements = "d,h",
+    output_placements = "h",
+    expected_input_layouts = "*,*",
+    expected_output_layouts = "*",
+    input_layouts = "*,*",
+    output_layouts = "*"
+  } : (tensor<?x?xf32>, tensor<2xi32>) -> tensor<?x?xf32>
+  return %1 : tensor<?x?xf32>
+}
+
+// -----
+
+// Test 1 for mhlo_disc.custom_call_v2
+// CHECK-LABEL: @main
+// CHECK-SAME: (%[[ARG0:.*]]: tensor<?x?xf32>, %[[ARG1:.*]]: tensor<2xi32>)
+func.func @main(%arg0: tensor<?x?xf32>, %arg1: tensor<2xi32>) -> tensor<?x?xf32> attributes {tf.entry_function = {
+                                  input_placements = "gpu,gpu",
+                                  inputs = "input0,input1",
+                                  output_placements = "gpu", outputs = "output0"}} {
+  // CHECK: %[[T0:.*]] = "mhlo_disc.d2h"
+  // CHECK-SAME: %[[ARG1]]
+  // CHECK: %[[T1:.*]] = "mhlo_disc.d2h"
+  // CHECK-SAME: %[[ARG1]]
+  // CHECK: %[[T2:.*]] = mhlo.add
+  // CHECK-SAME: %[[T0]], %[[T1]]
+  // CHECK: %[[T3:.*]] = "mhlo_disc.custom_call_v2"(%[[ARG0]], %[[T2]])
+  // CHECK-SAME: disc.device = "gpu"
+  // CHECK-NEXT: %[[T4:.*]] = "mhlo_disc.h2d"(%[[T3]])
+  // CHECK-NEXT: return %[[T4]]
+  %0 = mhlo.add %arg1, %arg1 : tensor<2xi32>
+  %1 = "mhlo_disc.custom_call_v2"(%arg0, %0) {
+    call_target_name = "foo",
+    custom_attrs = {},
+    has_side_effect = false,
+    device = "d",
+    input_placements = "d,h",
+    output_placements = "h",
+    expected_input_layouts = "*,*",
+    expected_output_layouts = "*",
+    input_layouts = "*,*",
+    output_layouts = "*"
+  } : (tensor<?x?xf32>, tensor<2xi32>) -> tensor<?x?xf32>
+  return %1 : tensor<?x?xf32>
+}
 

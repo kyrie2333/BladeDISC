@@ -22,8 +22,8 @@ limitations under the License.
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Debug.h"
-#include "mlir-hlo/Dialect/mhlo/IR/hlo_ops.h"
-#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mhlo/IR/hlo_ops.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Shape/IR/Shape.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"  // TF:llvm-project
@@ -36,13 +36,15 @@ limitations under the License.
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Transforms/Passes.h"
 #include "mlir/Transforms/Passes.h"  // TF:llvm-project
-#include "tensorflow/compiler/mlir/disc/IR/disc_shape_ops.h"
-#include "tensorflow/compiler/mlir/disc/IR/hlo_disc_ops.h"
-#include "tensorflow/compiler/mlir/disc/disc_util.h"
-#include "tensorflow/compiler/mlir/disc/transforms/PassDetail.h"
-#include "tensorflow/compiler/mlir/disc/transforms/disc_shape_optimization_utils.h"
+#include "mlir/disc/IR/disc_shape_ops.h"
+#include "mlir/disc/IR/hlo_disc_ops.h"
+#include "mlir/disc/disc_util.h"
+#include "mlir/disc/transforms/PassDetail.h"
+#include "mlir/disc/transforms/disc_shape_optimization_utils.h"
 
 #define DEBUG_TYPE "disc-shape-optimization"
+
+#define DISC_DEBUG(x) LLVM_DEBUG(x)
 
 namespace mlir {
 namespace disc_ral {
@@ -176,7 +178,7 @@ struct DimOfShapedTypeOpInterface : public OpRewritePattern<OpTy> {
 
   LogicalResult matchAndRewrite(OpTy dimOp,
                                 PatternRewriter& rewriter) const override {
-    OpResult dimValue = dimOp.source().template dyn_cast<OpResult>();
+    OpResult dimValue = dimOp.getSource().template dyn_cast<OpResult>();
     if (!dimValue) return failure();
     auto shapedTypeOp =
         dyn_cast<InferShapedTypeOpInterface>(dimValue.getOwner());
@@ -247,8 +249,7 @@ LogicalResult materializeShapeComputation(ModuleOp m, FuncOp main) {
   >(patterns.getContext());
   // clang-format on
 
-  if (failed(
-          applyPatternsAndFoldGreedily(m->getRegions(), std::move(patterns)))) {
+  if (failed(applyPatternsAndFoldGreedily(m, std::move(patterns)))) {
     return m.emitError() << "fail to materialize shape computation\n";
   }
   return success();
@@ -288,7 +289,7 @@ struct DimOfTieShapeOpCanonicalizationPattern
 
   LogicalResult matchAndRewrite(tensor::DimOp op,
                                 PatternRewriter& rewriter) const override {
-    auto tieShapeOp = op.source().getDefiningOp<disc_shape::TieShapeOp>();
+    auto tieShapeOp = op.getSource().getDefiningOp<disc_shape::TieShapeOp>();
     if (!tieShapeOp) return failure();
     Optional<int64_t> dimIndex = op.getConstantIndex();
     if (!dimIndex) return failure();
@@ -309,10 +310,10 @@ struct ExtractElementOfTieShapeOpCanonicalizationPattern
 
   LogicalResult matchAndRewrite(tensor::ExtractOp op,
                                 PatternRewriter& rewriter) const override {
-    auto tieShapeOp = op.tensor().getDefiningOp<disc_shape::TieShapeOp>();
+    auto tieShapeOp = op.getTensor().getDefiningOp<disc_shape::TieShapeOp>();
     if (!tieShapeOp) return failure();
     rewriter.replaceOpWithNewOp<tensor::ExtractOp>(
-        op, tieShapeOp->getOperand(0), op.indices());
+        op, tieShapeOp->getOperand(0), op.getIndices());
     return success();
   }
 };
@@ -329,15 +330,15 @@ struct ExtractElementOfConcatOpCanonicalizationPattern
 
   LogicalResult matchAndRewrite(tensor::ExtractOp op,
                                 PatternRewriter& rewriter) const override {
-    if (op.indices().size() != 1) return failure();
+    if (op.getIndices().size() != 1) return failure();
     auto indexOp = dyn_cast_or_null<arith::ConstantOp>(
-        op.indices().front().getDefiningOp());
+        op.getIndices().front().getDefiningOp());
     if (!indexOp) return failure();
     int64_t index = indexOp.getValue().cast<IntegerAttr>().getInt();
 
-    auto concatOp = op.tensor().getDefiningOp<mhlo::ConcatenateOp>();
+    auto concatOp = op.getTensor().getDefiningOp<mhlo::ConcatenateOp>();
     if (!concatOp) return failure();
-    if (!isCandidateShapeTensorType(op.tensor().getType())) return failure();
+    if (!isCandidateShapeTensorType(op.getTensor().getType())) return failure();
 
     for (Value operand : concatOp->getOperands()) {
       if (!isCandidateShapeTensorType(operand.getType())) return failure();
@@ -370,23 +371,23 @@ struct ExtractElementOfSliceOpCanonicalizationPattern
 
   LogicalResult matchAndRewrite(tensor::ExtractOp op,
                                 PatternRewriter& rewriter) const override {
-    if (op.indices().size() != 1) return failure();
+    if (op.getIndices().size() != 1) return failure();
     auto indexOp = dyn_cast_or_null<arith::ConstantOp>(
-        op.indices().front().getDefiningOp());
+        op.getIndices().front().getDefiningOp());
     if (!indexOp) return failure();
     int64_t index = indexOp.getValue().cast<IntegerAttr>().getInt();
 
-    auto sliceOp = op.tensor().getDefiningOp<mhlo::SliceOp>();
+    auto sliceOp = op.getTensor().getDefiningOp<mhlo::SliceOp>();
     if (!sliceOp) return failure();
-    if (!isCandidateShapeTensorType(op.tensor().getType())) return failure();
+    if (!isCandidateShapeTensorType(op.getTensor().getType())) return failure();
 
-    int64_t start = sliceOp.start_indices().getValues<int64_t>()[0];
-    int64_t stride = sliceOp.strides().getValues<int64_t>()[0];
+    int64_t start = sliceOp.getStartIndices().getValues<int64_t>()[0];
+    int64_t stride = sliceOp.getStrides().getValues<int64_t>()[0];
     int64_t inputIndex = (start + index * stride);
     Value newIndex =
         rewriter.create<arith::ConstantIndexOp>(op.getLoc(), inputIndex);
     Value newValue = rewriter.create<tensor::ExtractOp>(
-        op.getLoc(), sliceOp.operand(), newIndex);
+        op.getLoc(), sliceOp.getOperand(), newIndex);
 
     rewriter.replaceOp(op, {newValue});
     return success();
@@ -404,17 +405,17 @@ struct ExtractElementOfReshapeOpCanonicalizationPattern
 
   LogicalResult matchAndRewrite(tensor::ExtractOp op,
                                 PatternRewriter& rewriter) const override {
-    auto tensorTy = op.tensor().getType().dyn_cast<RankedTensorType>();
+    auto tensorTy = op.getTensor().getType().dyn_cast<RankedTensorType>();
     if (!tensorTy || !tensorTy.hasStaticShape() ||
         !tensorTy.getElementType().isIntOrIndex() ||
         tensorTy.getNumElements() > 8 || tensorTy.getNumElements() == 0)
       return failure();
 
-    auto reshapeOp = op.tensor().getDefiningOp<mhlo::ReshapeOp>();
+    auto reshapeOp = op.getTensor().getDefiningOp<mhlo::ReshapeOp>();
     if (!reshapeOp) return failure();
 
     SmallVector<int64_t> indices;
-    for (Value indexValue : op.indices()) {
+    for (Value indexValue : op.getIndices()) {
       auto indexOp = indexValue.getDefiningOp<arith::ConstantOp>();
       if (!indexOp) return failure();
       indices.push_back(indexOp.getValue().cast<IntegerAttr>().getInt());
@@ -426,7 +427,8 @@ struct ExtractElementOfReshapeOpCanonicalizationPattern
     }
 
     SmallVector<int64_t> inputIndices;
-    auto inputTy = reshapeOp.operand().getType().dyn_cast<RankedTensorType>();
+    auto inputTy =
+        reshapeOp.getOperand().getType().dyn_cast<RankedTensorType>();
     if (!inputTy || !inputTy.hasStaticShape()) return failure();
     for (int i = inputTy.getRank() - 1; i >= 0; --i) {
       inputIndices.push_back(linearIndex % inputTy.getShape()[i]);
@@ -438,7 +440,7 @@ struct ExtractElementOfReshapeOpCanonicalizationPattern
           op.getLoc(), inputIndices[i]));
     }
     Value newValue = rewriter.create<tensor::ExtractOp>(
-        op.getLoc(), reshapeOp.operand(), newIndices);
+        op.getLoc(), reshapeOp.getOperand(), newIndices);
     rewriter.replaceOp(op, {newValue});
     return success();
   }
@@ -467,21 +469,21 @@ struct ExtractElementOfReduceOpCanonicalizationPattern
 
   LogicalResult matchAndRewrite(tensor::ExtractOp op,
                                 PatternRewriter& rewriter) const override {
-    auto tensorTy = op.tensor().getType().dyn_cast<RankedTensorType>();
+    auto tensorTy = op.getTensor().getType().dyn_cast<RankedTensorType>();
     if (!tensorTy || !tensorTy.hasStaticShape() ||
         !tensorTy.getElementType().isIntOrIndex() ||
         tensorTy.getNumElements() > 8 || tensorTy.getNumElements() == 0)
       return failure();
 
-    auto reduceOp = op.tensor().getDefiningOp<mhlo::ReduceOp>();
+    auto reduceOp = op.getTensor().getDefiningOp<mhlo::ReduceOp>();
     if (!reduceOp || reduceOp->getNumResults() > 1) return failure();
 
     // Only support reducing arcross a single dimension.
-    if (reduceOp.dimensions().getValues<int64_t>().size() != 1)
+    if (reduceOp.getDimensions().getValues<int64_t>().size() != 1)
       return failure();
-    int64_t reduceAxis = *reduceOp.dimensions().getValues<int64_t>().begin();
+    int64_t reduceAxis = *reduceOp.getDimensions().getValues<int64_t>().begin();
 
-    auto& block = reduceOp.body().front();
+    auto& block = reduceOp.getBody().front();
     if (!hasSingleElement(block.without_terminator())) return failure();
     if (!isa<mhlo::MulOp>(&(*block.begin()))) return failure();
 
@@ -507,7 +509,7 @@ struct ExtractElementOfReduceOpCanonicalizationPattern
     SmallVector<Value> indices(dataTy.getRank());
     for (int64_t i = 0; i < dataTy.getRank(); ++i) {
       if (i == reduceAxis) continue;
-      indices[i] = op.indices()[nextNonReduceIdx++];
+      indices[i] = op.getIndices()[nextNonReduceIdx++];
     }
 
     Value newResult = initValue;
@@ -543,13 +545,13 @@ struct ExtractElementOfGatherOpCanonicalizationPattern
 
   LogicalResult matchAndRewrite(tensor::ExtractOp op,
                                 PatternRewriter& rewriter) const override {
-    if (op.indices().size() != 1) return failure();
+    if (op.getIndices().size() != 1) return failure();
     auto indexOp = dyn_cast_or_null<arith::ConstantOp>(
-        op.indices().front().getDefiningOp());
+        op.getIndices().front().getDefiningOp());
     if (!indexOp) return failure();
     int64_t index = indexOp.getValue().cast<IntegerAttr>().getInt();
 
-    auto gatherOp = op.tensor().getDefiningOp();
+    auto gatherOp = op.getTensor().getDefiningOp();
     if (!gatherOp || !isa<mhlo::GatherOp, mhlo::DynamicGatherOp>(gatherOp))
       return failure();
 
@@ -661,8 +663,7 @@ LogicalResult runCanonicalizer(ModuleOp m, PassPipelineRunner runner) {
       "mlir::disc_shape::{anonymous}::IdentityTieShapeOp"};
   FrozenRewritePatternSet frozenSet(std::move(patterns), disablePatterns);
 
-  if (failed(applyPatternsAndFoldGreedily(m->getRegions(),
-                                          std::move(frozenSet)))) {
+  if (failed(applyPatternsAndFoldGreedily(m, std::move(frozenSet)))) {
     return m.emitError() << "fail to run canonicalizer\n";
   }
 
@@ -859,7 +860,7 @@ LogicalResult ShapeComputationIRAnalysis::applyIndexOpConstraint(
   Type ty = op->getResult(0).getType();
   if (!ty.isIntOrIndex()) return success();
 
-  if (isa<arith::IndexCastOp>(op)) {
+  if (isa<arith::IndexCastOp, arith::TruncIOp>(op)) {
     Value in = op->getOperand(0);
     Value out = op->getResult(0);
     if (failed(mgr_.mapSymbolicDimEqual(value2SymDim_[in], value2SymDim_[out])))
@@ -868,10 +869,10 @@ LogicalResult ShapeComputationIRAnalysis::applyIndexOpConstraint(
   } else if (auto dimOp = dyn_cast<tensor::DimOp>(op)) {
     Optional<int64_t> dimIndex = dimOp.getConstantIndex();
     if (!dimIndex) return success();
-    value2SymDim_[op->getResult(0)].setKnownNonNegative(true);
+    value2SymDim_[op->getResult(0)].updateKnownNonNegative(true);
     if (failed(mgr_.mapSymbolicDimEqual(
             value2SymDim_[op->getResult(0)],
-            rankedTensor2SymDims_[dimOp.source()][*dimIndex])))
+            rankedTensor2SymDims_[dimOp.getSource()][*dimIndex])))
       return op->emitError() << "fail to merge dim\n";
   } else if (isa<arith::ConstantIndexOp, arith::ConstantIntOp>(op)) {
     int64_t val = op->getAttrOfType<IntegerAttr>("value").getInt();
@@ -883,13 +884,13 @@ LogicalResult ShapeComputationIRAnalysis::applyIndexOpConstraint(
       return op->emitError() << "fail to merge dim\n";
     value2DefiningExpr_[out] = SymbolicDimExpr(val, out.getContext());
   } else if (auto extractOp = dyn_cast<tensor::ExtractOp>(op)) {
-    if (!isCandidateShapeTensorType(extractOp.tensor().getType()))
+    if (!isCandidateShapeTensorType(extractOp.getTensor().getType()))
       return success();
     auto indexOp = dyn_cast_or_null<arith::ConstantIndexOp>(
         op->getOperand(1).getDefiningOp());
     if (!indexOp) return success();
     int64_t index = indexOp.getValue().cast<IntegerAttr>().getInt();
-    auto& shapeTensorDims = shapeTensor2SymDims_[extractOp.tensor()];
+    auto& shapeTensorDims = shapeTensor2SymDims_[extractOp.getTensor()];
     if (index >= shapeTensorDims.size())
       return op->emitError() << "miss match shape tensor size\n";
     if (failed(mgr_.mapSymbolicDimEqual(value2SymDim_[op->getResult(0)],
@@ -904,15 +905,15 @@ LogicalResult ShapeComputationIRAnalysis::applyIndexOpConstraint(
     auto lhsSym = mgr_.getRootSymbolicDim(value2SymDim_[lhs]);
     auto rhsSym = mgr_.getRootSymbolicDim(value2SymDim_[rhs]);
     auto outSym = mgr_.getRootSymbolicDim(value2SymDim_[out]);
-    if (lhsSym.knownNonNegative() && rhsSym.knownNonNegative()) {
-      outSym.setKnownNonNegative(true);
+    if (lhsSym.getKnownNonNegative() && rhsSym.getKnownNonNegative()) {
+      outSym.updateKnownNonNegative(true);
     }
-    if (lhsSym.knownNonNegative() && rhsSym.knownNonSizeOne() ||
-        rhsSym.knownNonNegative() && lhsSym.knownNonSizeOne()) {
-      outSym.setKnownNonSizeOne(true);
+    if (lhsSym.getKnownNonNegative() && rhsSym.getKnownNonSizeOne() ||
+        rhsSym.getKnownNonNegative() && lhsSym.getKnownNonSizeOne()) {
+      outSym.updateKnownNonSizeOne(true);
     }
-    if (lhsSym.knownNonSizeZero() && rhsSym.knownNonSizeZero()) {
-      outSym.setKnownNonSizeZero(true);
+    if (lhsSym.getKnownNonSizeZero() && rhsSym.getKnownNonSizeZero()) {
+      outSym.updateKnownNonSizeZero(true);
     }
     // TODO(disc): propagate other attributes/shape ranges??
   } else if (auto addOp = dyn_cast<arith::AddIOp>(op)) {
@@ -923,10 +924,10 @@ LogicalResult ShapeComputationIRAnalysis::applyIndexOpConstraint(
     auto lhsSym = mgr_.getRootSymbolicDim(value2SymDim_[lhs]);
     auto rhsSym = mgr_.getRootSymbolicDim(value2SymDim_[rhs]);
     auto outSym = mgr_.getRootSymbolicDim(value2SymDim_[out]);
-    if (lhsSym.knownNonNegative() && rhsSym.knownNonNegative()) {
-      outSym.setKnownNonNegative(true);
-      if (lhsSym.knownNonSizeZero() || rhsSym.knownNonSizeZero())
-        outSym.setKnownNonSizeZero(true);
+    if (lhsSym.getKnownNonNegative() && rhsSym.getKnownNonNegative()) {
+      outSym.updateKnownNonNegative(true);
+      if (lhsSym.getKnownNonSizeZero() || rhsSym.getKnownNonSizeZero())
+        outSym.updateKnownNonSizeZero(true);
     }
     // TODO(disc): propagate other constraint attributes/shape ranges??
   }
@@ -987,6 +988,21 @@ LogicalResult ShapeComputationIRAnalysis::applyShapeTensorOpConstraint(
         if (failed(mgr_.mapSymbolicDimEqual(lhsSymbol, outSymbol)))
           return op->emitError() << "fail to merge dim\n";
     }
+  } else if (auto computeReshapeOp =
+                 dyn_cast<mhlo::ComputeReshapeShapeOp>(op)) {
+    auto& inDims = shapeTensor2SymDims_[op->getOperand(1)];
+    auto& outDims = shapeTensor2SymDims_[op->getResult(0)];
+
+    if (inDims.size() != outDims.size()) {
+      return op->emitError() << "ComputeReshapeShapeOp mismatch rank\n";
+    }
+
+    for (auto [inSymbol, outSymbol] : llvm::zip(inDims, outDims)) {
+      if (mgr_.getRootSymbolicDim(inSymbol).getKnownNonNegative()) {
+        if (failed(mgr_.mapSymbolicDimEqual(inSymbol, outSymbol)))
+          return op->emitError() << "fail to merge dim\n";
+      }
+    }
   }
 
   // TODO: add support for arith::addi/subi/...
@@ -1019,45 +1035,46 @@ LogicalResult ShapeComputationIRAnalysis::applyMhloElemOpConstraint(
         return op->emitError()
                << "fail to merge symbolic dim between operands of element op\n";
   } else if (auto clamp = dyn_cast<mhlo::ClampOp>(op)) {
-    auto operandTy = clamp.operand().getType().dyn_cast<RankedTensorType>();
-    auto minTy = clamp.min().getType().dyn_cast<RankedTensorType>();
-    auto maxTy = clamp.max().getType().dyn_cast<RankedTensorType>();
+    auto operandTy = clamp.getOperand().getType().dyn_cast<RankedTensorType>();
+    auto minTy = clamp.getMin().getType().dyn_cast<RankedTensorType>();
+    auto maxTy = clamp.getMax().getType().dyn_cast<RankedTensorType>();
     if (!operandTy || !minTy || !maxTy) return success();
 
     if (minTy.getRank() != 0) {
-      if (failed(mapRankedValueShapeEqual(clamp.operand(), clamp.min())))
+      if (failed(mapRankedValueShapeEqual(clamp.getOperand(), clamp.getMin())))
         return op->emitError()
                << "fail to merge the symbolic dim of operand and "
                   "min of mhlo::ClampOp\n";
     }
     if (maxTy.getRank() != 0) {
-      if (failed(mapRankedValueShapeEqual(clamp.operand(), clamp.max())))
+      if (failed(mapRankedValueShapeEqual(clamp.getOperand(), clamp.getMax())))
         return op->emitError()
                << "fail to merge the symbolic dim of operand and "
                   "max of mhlo::ClampOp\n";
     }
   } else if (auto select = dyn_cast<mhlo::SelectOp>(op)) {
-    auto predTy = select.pred().getType().dyn_cast<RankedTensorType>();
-    auto trueTy = select.on_true().getType().dyn_cast<RankedTensorType>();
-    auto falseTy = select.on_false().getType().dyn_cast<RankedTensorType>();
+    auto predTy = select.getPred().getType().dyn_cast<RankedTensorType>();
+    auto trueTy = select.getOnTrue().getType().dyn_cast<RankedTensorType>();
+    auto falseTy = select.getOnFalse().getType().dyn_cast<RankedTensorType>();
     auto resultTy = select.getResult().getType().dyn_cast<RankedTensorType>();
     if (!predTy || !trueTy || !falseTy || !resultTy) return success();
 
     if (predTy.getRank() != 0) {
-      if (failed(mapRankedValueShapeEqual(select.pred(), select.getResult())))
+      if (failed(
+              mapRankedValueShapeEqual(select.getPred(), select.getResult())))
         return op->emitError() << "fail to merge the symbolic dim of pred and "
                                   "result of mhlo::SelectOp\n";
     }
     if (trueTy.getRank() != 0) {
       if (failed(
-              mapRankedValueShapeEqual(select.on_true(), select.getResult())))
+              mapRankedValueShapeEqual(select.getOnTrue(), select.getResult())))
         return op->emitError()
                << "fail to merge the symbolic dim of on_true and "
                   "result of mhlo::SelectOp\n";
     }
     if (falseTy.getRank() != 0) {
-      if (failed(
-              mapRankedValueShapeEqual(select.on_false(), select.getResult())))
+      if (failed(mapRankedValueShapeEqual(select.getOnFalse(),
+                                          select.getResult())))
         return op->emitError()
                << "fail to merge the symbolic dim of on_false and "
                   "result of mhlo::SelectOp\n";
@@ -1079,7 +1096,7 @@ LogicalResult ShapeComputationIRAnalysis::applyMhloDotLikeOpConstraint(
     auto& rhsDims = rankedTensor2SymDims_[rhs];
     if (lhsTy.getRank() != lhsDims.size() || rhsTy.getRank() != rhsDims.size())
       return op->emitError("lhs or rhs mismatch rank\n");
-    auto dim_numbers = dot_general.dot_dimension_numbers();
+    auto dim_numbers = dot_general.getDotDimensionNumbers();
     // Contracting dimensions.
     auto lhs_contracting_dims = dim_numbers.getLhsContractingDimensions();
     auto rhs_contracting_dims = dim_numbers.getRhsContractingDimensions();
@@ -1115,16 +1132,16 @@ LogicalResult ShapeComputationIRAnalysis::applyMhloDotLikeOpConstraint(
             mgr_.mapSymbolicDimEqual(lhsDims[lhsTy.getRank() - 1], rhsDims[0])))
       return op->emitError() << "fail to merge dim\n";
   } else if (auto einsum = dyn_cast<mhlo::EinsumOp>(op)) {
-    auto lhsTy = einsum.lhs().getType().dyn_cast<RankedTensorType>();
-    auto rhsTy = einsum.rhs().getType().dyn_cast<RankedTensorType>();
+    auto lhsTy = einsum.getLhs().getType().dyn_cast<RankedTensorType>();
+    auto rhsTy = einsum.getRhs().getType().dyn_cast<RankedTensorType>();
     auto outTy = einsum.getResult().getType().dyn_cast<RankedTensorType>();
     if (!lhsTy || !rhsTy || !outTy) return success();
 
-    auto& lhsDims = rankedTensor2SymDims_[einsum.lhs()];
-    auto& rhsDims = rankedTensor2SymDims_[einsum.rhs()];
+    auto& lhsDims = rankedTensor2SymDims_[einsum.getLhs()];
+    auto& rhsDims = rankedTensor2SymDims_[einsum.getRhs()];
     auto& outDims = rankedTensor2SymDims_[einsum.getResult()];
 
-    StringRef equation = einsum.einsum_config();
+    StringRef equation = einsum.getEinsumConfig();
     llvm::SmallDenseMap<char, llvm::SmallDenseMap<EquationVariable, size_t>>
         all_tokens;
     if (!parseEinsumEquation(equation, all_tokens, nullptr, nullptr, nullptr)) {
@@ -1194,7 +1211,7 @@ LogicalResult ShapeComputationIRAnalysis::applyMhloConcatOpConstraint(
     Operation* op) {
   if (auto concat = dyn_cast<mhlo::ConcatenateOp>(op)) {
     Value out = op->getResult(0);
-    int64_t axis = concat.dimension();
+    int64_t axis = concat.getDimension();
     auto ty = out.getType().dyn_cast<RankedTensorType>();
     if (!ty) return success();
     auto& outDims = rankedTensor2SymDims_[out];
@@ -1355,7 +1372,8 @@ LogicalResult ShapeComputationIRAnalysis::applyTieShapeOpConstraint(
       if (failed(mgr_.mapSymbolicDimEqual(value2SymDim_[en.value()],
                                           resultDims[en.index()])))
         return op->emitError() << "fail to merge symbolic dim\n";
-      mgr_.getRootSymbolicDim(resultDims[en.index()]).setKnownNonNegative(true);
+      mgr_.getRootSymbolicDim(resultDims[en.index()])
+          .updateKnownNonNegative(true);
     }
 
     if (isCandidateShapeTensorType(op->getResult(0).getType())) {
@@ -1425,7 +1443,7 @@ Type ShapeComputationIRAnalysis::getRefinedType(Value value) {
   for (SymbolicDimOp sym : rankedTensor2SymDims_[value]) {
     auto root = mgr_.getRootSymbolicDim(sym);
     newShape.push_back(root.getDimSize());
-    if (newShape.back() == ShapedType::kDynamicSize) noDynamicDim = false;
+    if (newShape.back() == ShapedType::kDynamic) noDynamicDim = false;
     refAttrs.push_back(SymbolRefAttr::get(value.getContext(), root.getName()));
   }
 
@@ -1575,26 +1593,26 @@ LogicalResult tryToSimplifyCompareOp(ShapeComputationIRAnalysis& analysis,
     if (op.getPredicate() == arith::CmpIPredicate::eq) {
       if (lhsSym == rhsSym) {
         pred = truePred;
-      } else if (lhsSym.knownNonNegative() && rhsSym.knownNegativeOne()) {
+      } else if (lhsSym.getKnownNonNegative() && rhsSym.getKnownNegativeOne()) {
         pred = falsePred;
-      } else if (rhsSym.knownNonNegative() && lhsSym.knownNegativeOne()) {
+      } else if (rhsSym.getKnownNonNegative() && lhsSym.getKnownNegativeOne()) {
         pred = falsePred;
-      } else if (lhsSym.knownNonSizeZero() && rhsSym.getDimSize() == 0) {
+      } else if (lhsSym.getKnownNonSizeZero() && rhsSym.getDimSize() == 0) {
         pred = falsePred;
-      } else if (rhsSym.knownNonSizeZero() && lhsSym.getDimSize() == 0) {
+      } else if (rhsSym.getKnownNonSizeZero() && lhsSym.getDimSize() == 0) {
         pred = falsePred;
       }
       // TODO(disc): support other cases
     } else if (op.getPredicate() == arith::CmpIPredicate::ne) {
       if (lhsSym == rhsSym) {
         pred = falsePred;
-      } else if (lhsSym.knownNonNegative() && rhsSym.knownNegativeOne()) {
+      } else if (lhsSym.getKnownNonNegative() && rhsSym.getKnownNegativeOne()) {
         pred = truePred;
-      } else if (rhsSym.knownNonNegative() && lhsSym.knownNegativeOne()) {
+      } else if (rhsSym.getKnownNonNegative() && lhsSym.getKnownNegativeOne()) {
         pred = truePred;
-      } else if (lhsSym.knownNonSizeZero() && rhsSym.getDimSize() == 0) {
+      } else if (lhsSym.getKnownNonSizeZero() && rhsSym.getDimSize() == 0) {
         pred = truePred;
-      } else if (rhsSym.knownNonSizeZero() && lhsSym.getDimSize() == 0) {
+      } else if (rhsSym.getKnownNonSizeZero() && lhsSym.getDimSize() == 0) {
         pred = truePred;
       }
       // TODO(disc): support other cases
@@ -1777,12 +1795,12 @@ LogicalResult optimizeShapeComputation(ModuleOp m, FuncOp main,
   do {
     changed = false;
     std::chrono::steady_clock::time_point begin, end;
-    LLVM_DEBUG(begin = std::chrono::steady_clock::now());
+    DISC_DEBUG(begin = std::chrono::steady_clock::now());
     if (failed(runCanonicalizer(m, runner))) {
       return failure();
     }
-    LLVM_DEBUG(end = std::chrono::steady_clock::now());
-    LLVM_DEBUG(llvm::dbgs()
+    DISC_DEBUG(end = std::chrono::steady_clock::now());
+    DISC_DEBUG(llvm::dbgs()
                << "  runCanonicalizer takes: "
                << std::chrono::duration_cast<std::chrono::microseconds>(end -
                                                                         begin)
@@ -1794,47 +1812,47 @@ LogicalResult optimizeShapeComputation(ModuleOp m, FuncOp main,
         << "Module after runCanonicalizer in optimize-shape-computation:\n"
         << m << "\n");
 
-    LLVM_DEBUG(begin = std::chrono::steady_clock::now());
+    DISC_DEBUG(begin = std::chrono::steady_clock::now());
     SymbolicDimMgr mgr(m);
-    LLVM_DEBUG(end = std::chrono::steady_clock::now());
-    LLVM_DEBUG(llvm::dbgs()
+    DISC_DEBUG(end = std::chrono::steady_clock::now());
+    DISC_DEBUG(llvm::dbgs()
                << "  Building SymbolicDimMgr takes: "
                << std::chrono::duration_cast<std::chrono::microseconds>(end -
                                                                         begin)
                       .count()
                << " us\n");
 
-    LLVM_DEBUG(begin = std::chrono::steady_clock::now());
+    DISC_DEBUG(begin = std::chrono::steady_clock::now());
     if (failed(mgr.load())) {
       return m.emitError() << "fail to load shape constraint IR\n";
     }
-    LLVM_DEBUG(end = std::chrono::steady_clock::now());
-    LLVM_DEBUG(llvm::dbgs()
+    DISC_DEBUG(end = std::chrono::steady_clock::now());
+    DISC_DEBUG(llvm::dbgs()
                << "  SymbolicDimMgr.load() takes: "
                << std::chrono::duration_cast<std::chrono::microseconds>(end -
                                                                         begin)
                       .count()
                << " us\n");
 
-    LLVM_DEBUG(begin = std::chrono::steady_clock::now());
+    DISC_DEBUG(begin = std::chrono::steady_clock::now());
     ShapeComputationIRAnalysis analysis(main, mgr);
     if (failed(analysis.run())) {
       return m.emitError() << "fail to analysis shape computation IR\n";
     }
-    LLVM_DEBUG(end = std::chrono::steady_clock::now());
-    LLVM_DEBUG(llvm::dbgs()
+    DISC_DEBUG(end = std::chrono::steady_clock::now());
+    DISC_DEBUG(llvm::dbgs()
                << "  Building ShapeComputationIRAnalysis takes: "
                << std::chrono::duration_cast<std::chrono::microseconds>(end -
                                                                         begin)
                       .count()
                << " us\n");
 
-    LLVM_DEBUG(begin = std::chrono::steady_clock::now());
+    DISC_DEBUG(begin = std::chrono::steady_clock::now());
     if (failed(applyShapeComputationOptimization(analysis, changed))) {
       return m.emitError() << "fail to optimize shape computation IR\n";
     }
-    LLVM_DEBUG(end = std::chrono::steady_clock::now());
-    LLVM_DEBUG(llvm::dbgs()
+    DISC_DEBUG(end = std::chrono::steady_clock::now());
+    DISC_DEBUG(llvm::dbgs()
                << "  applyShapeComputationOptimization takes: "
                << std::chrono::duration_cast<std::chrono::microseconds>(end -
                                                                         begin)
@@ -1846,12 +1864,12 @@ LogicalResult optimizeShapeComputation(ModuleOp m, FuncOp main,
         << "Module after apply-shape-opt in optimize-shape-computation:\n"
         << m << "\n");
 
-    LLVM_DEBUG(begin = std::chrono::steady_clock::now());
+    DISC_DEBUG(begin = std::chrono::steady_clock::now());
     if (failed(mgr.save())) {
       return m.emitError() << "fail to save shape constraint IR\n";
     }
-    LLVM_DEBUG(end = std::chrono::steady_clock::now());
-    LLVM_DEBUG(llvm::dbgs()
+    DISC_DEBUG(end = std::chrono::steady_clock::now());
+    DISC_DEBUG(llvm::dbgs()
                << "  SymbolicDimMgr.save() takes: "
                << std::chrono::duration_cast<std::chrono::microseconds>(end -
                                                                         begin)
@@ -1891,8 +1909,7 @@ LogicalResult cleanUp(ModuleOp m, bool keep_tie_shape) {
     RewritePatternSet patterns(m.getContext());
     patterns.add<ForwardTieShapeOperandToItsConsumers>(patterns.getContext());
 
-    if (failed(applyPatternsAndFoldGreedily(m->getRegions(),
-                                            std::move(patterns)))) {
+    if (failed(applyPatternsAndFoldGreedily(m, std::move(patterns)))) {
       return m.emitError() << "fail to do cleanup\n";
     }
   } else {
@@ -1989,14 +2006,14 @@ void DiscShapeOptimizationPass::runOnOperation() {
   }
 
   std::chrono::steady_clock::time_point begin, end;
-  LLVM_DEBUG(begin = std::chrono::steady_clock::now());
+  DISC_DEBUG(begin = std::chrono::steady_clock::now());
   // Stage #1: Explictily materialize shape computation IR on tensor level
   if (failed(materializeShapeComputation(m, main))) {
     signalPassFailure();
     return;
   }
-  LLVM_DEBUG(end = std::chrono::steady_clock::now());
-  LLVM_DEBUG(
+  DISC_DEBUG(end = std::chrono::steady_clock::now());
+  DISC_DEBUG(
       llvm::dbgs() << "materializeShapeComputation takes: "
                    << std::chrono::duration_cast<std::chrono::microseconds>(
                           end - begin)
@@ -2006,7 +2023,7 @@ void DiscShapeOptimizationPass::runOnOperation() {
                           << m << "\n");
 
   // Stage #2: Optimize shape computation IR on tensor level
-  LLVM_DEBUG(begin = std::chrono::steady_clock::now());
+  DISC_DEBUG(begin = std::chrono::steady_clock::now());
   PassPipelineRunner runner = [this](OpPassManager& dynamicPM, ModuleOp m) {
     return runPipeline(dynamicPM, m);
   };
@@ -2014,29 +2031,29 @@ void DiscShapeOptimizationPass::runOnOperation() {
     signalPassFailure();
     return;
   }
-  LLVM_DEBUG(end = std::chrono::steady_clock::now());
-  LLVM_DEBUG(
+  DISC_DEBUG(end = std::chrono::steady_clock::now());
+  DISC_DEBUG(
       llvm::dbgs() << "optimizeShapeComputation takes: "
                    << std::chrono::duration_cast<std::chrono::microseconds>(
                           end - begin)
                           .count()
                    << " us\n");
-  LLVM_DEBUG(llvm::dbgs() << "Module after shape optimizaiton:\n" << m << "\n");
+  DISC_DEBUG(llvm::dbgs() << "Module after shape optimizaiton:\n" << m << "\n");
 
   // Stage #3: clean up
-  LLVM_DEBUG(begin = std::chrono::steady_clock::now());
+  DISC_DEBUG(begin = std::chrono::steady_clock::now());
   if (failed(cleanUp(m, keep_tie_shape_))) {
     signalPassFailure();
     return;
   }
-  LLVM_DEBUG(end = std::chrono::steady_clock::now());
-  LLVM_DEBUG(
+  DISC_DEBUG(end = std::chrono::steady_clock::now());
+  DISC_DEBUG(
       llvm::dbgs() << "cleanUp takes: "
                    << std::chrono::duration_cast<std::chrono::microseconds>(
                           end - begin)
                           .count()
                    << " us\n");
-  LLVM_DEBUG(llvm::dbgs() << "Module after cleanup:\n" << m << "\n");
+  DISC_DEBUG(llvm::dbgs() << "Module after cleanup:\n" << m << "\n");
 }
 
 }  // namespace

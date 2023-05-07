@@ -24,7 +24,8 @@ limitations under the License.
 #include "mlir/Target/LLVMIR/Dialect/NVVM/NVVMToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Export.h"
 #include "mlir/Transforms/DialectConversion.h"
-#include "tensorflow/compiler/mlir/disc/transforms/PassDetail.h"
+#include "mlir/disc/transforms/PassDetail.h"
+#include "mlir/disc/transforms/codegen_utils.h"
 #include "tensorflow/compiler/xla/debug_options_flags.h"
 #include "tensorflow/compiler/xla/service/gpu/gpu_asm_opts_util.h"
 #include "tensorflow/compiler/xla/service/gpu/llvm_gpu_backend/gpu_backend_lib.h"
@@ -35,21 +36,19 @@ limitations under the License.
 #include "tensorflow/compiler/xla/service/llvm_ir/llvm_type_conversion_util.h"
 #include "tensorflow/compiler/xla/status.h"
 #include "tensorflow/compiler/xla/statusor.h"
-#include "tensorflow/core/platform/cuda_libdevice_path.h"
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/platform/path.h"
 #include "tensorflow/core/platform/random.h"
 #include "tensorflow/core/util/env_var.h"
-#include "transforms/codegen_utils.h"
+#include "tensorflow/tsl/platform/cuda_libdevice_path.h"
 
 #if defined(GOOGLE_CUDA) || defined(TENSORFLOW_USE_ROCM)
-#include "tensorflow/stream_executor/gpu/asm_compiler.h"
+#include "tensorflow/compiler/xla/stream_executor/gpu/asm_compiler.h"
 #endif
-
-#if TENSORFLOW_USE_ROCM
+#if (TENSORFLOW_USE_ROCM || TENSORFLOW_USE_DCU)
 #include "rocm/rocm_config.h"
+#include "tensorflow/compiler/xla/stream_executor/rocm/rocm_driver_wrapper.h"
 #include "tensorflow/core/platform/rocm_rocdl_path.h"
-#include "tensorflow/stream_executor/rocm/rocm_driver_wrapper.h"
 #define CUDA_SUCCESS hipSuccess
 #define ROCM_CALL(func)                                             \
   {                                                                 \
@@ -122,7 +121,7 @@ class GpuKernelToBlobPass
           gpu_module.emitError(blob_or.status().error_message());
           return signalPassFailure();
         }
-        const auto& blob = blob_or.ValueOrDie();
+        const auto& blob = blob_or.value();
         std::string blob_string(blob.begin(), blob.end());
         std::string attr_str = std::string(kGpuBinaryAttrName) + "_" + name;
         gpu_module->setAttr(attr_str,
@@ -135,7 +134,7 @@ class GpuKernelToBlobPass
         gpu_module.emitError(blob_or.status().error_message());
         return signalPassFailure();
       }
-      const auto& blob = blob_or.ValueOrDie();
+      const auto& blob = blob_or.value();
       std::string blob_string(blob.begin(), blob.end());
       gpu_module->setAttr(blob_annotation_,
                           mlir::StringAttr::get(&getContext(), blob_string));
@@ -151,7 +150,7 @@ class GpuKernelToBlobPass
       return xla::InternalError("llc execute fail: %s, error code %d",
                                 error_message, result);
     }
-    return xla::Status::OK();
+    return xla::OkStatus();
   }
 
   xla::StatusOr<std::vector<uint8_t>> GetGpuBinaryBlob(
@@ -280,7 +279,7 @@ class GpuKernelToBlobPass
     // Parse ROCm architecture.
     absl::string_view consumable_arch(arch_str);
     if (!absl::ConsumePrefix(&consumable_arch, "gfx")) {
-      return tensorflow::errors::Internal(
+      return tsl::errors::Internal(
           "Could not parse ROCm architecture prefix (expected gfx)");
     }
     std::string libdevice_dir = tensorflow::RocdlRoot();
@@ -294,12 +293,41 @@ class GpuKernelToBlobPass
 #endif
 
     auto llvm_module_copy = llvm::CloneModule(*llvmModule);
+    auto kname = gpu_module.getName().str();
     auto hsaco_or = xla::gpu::amdgpu::CompileToHsaco(
         llvm_module_copy.get(), tensorflow::se::RocmComputeCapability{arch_str},
         config, libdevice_dir);
 
+    bool dump_files;
+    tensorflow::ReadBoolFromEnvVar("DISC_ROCM_DUMP_FILES", false, &dump_files);
+
     if (!hsaco_or.ok()) {
-      VLOG(0) << "LLVM Backend compile HSACO fail.";
+      LOG(WARNING) << "LLVM Backend compile HSACO fail.";
+    } else if (dump_files) {
+      std::error_code ec;
+      std::string ll_path = kname + "_debugllvm.ll";
+      std::unique_ptr<llvm::raw_fd_ostream> ll_fs(
+          new llvm::raw_fd_ostream(ll_path, ec, llvm::sys::fs::OF_None));
+      llvmModule->print(*ll_fs, nullptr);
+      ll_fs->flush();
+
+      const auto& blob = hsaco_or.value();
+      std::string llvmpath = kname + "_debugllvm.hsaco";
+      auto myfile = std::fstream(llvmpath, std::ios::out | std::ios::binary);
+      myfile.write((char*)blob.data(), blob.size());
+      myfile.close();
+      LOG(INFO) << "llvm hsaco to " << llvmpath;
+      hipModule_t hipmodule;
+
+      hipError_t res = stream_executor::wrap::hipModuleLoadData(
+          &hipmodule, reinterpret_cast<const void*>(blob.data()));
+      if (res != hipSuccess) {
+        LOG(WARNING) << "error for hsoco build " << res << " " << kname;
+      } else {
+        LOG(INFO) << "Finish for hsoco build " << res << " " << kname;
+      }
+    } else {
+      LOG(WARNING) << "LLVM Backend compile HSACO fail.";
     }
     return hsaco_or;
 
@@ -359,16 +387,16 @@ class GpuKernelToBlobPass
 
     // Compile and collect requested fatbin and PTX images.
     std::vector<tensorflow::se::CubinOrPTXImage> images;
-    TF_ASSIGN_OR_RETURN(std::string libdevice_dir, GetLibdeviceDir(config));
     auto gpu_asm_opts =
         xla::gpu::PtxOptsFromDebugOptions(config.debug_options());
 
+    // [GPU] Fold finding libdevice_dir into PTX compilation
     TF_ASSIGN_OR_RETURN(
         std::string ptx,
         xla::gpu::nvptx::CompileToPtx(
             llvmModule.get(),
             tensorflow::se::CudaComputeCapability{cc_major, cc_minor}, config,
-            libdevice_dir, enable_fusion));
+            enable_fusion));
 
     VLOG(1) << "PTX code: \n" << ptx;
 
@@ -403,23 +431,6 @@ class GpuKernelToBlobPass
     registerLLVMDialectTranslation(registry);
     registerNVVMDialectTranslation(registry);
     OperationPass<gpu::GPUModuleOp>::getDependentDialects(registry);
-  }
-
- private:
-  xla::StatusOr<std::string> GetLibdeviceDir(
-      const xla::HloModuleConfig& hlo_module_config) {
-    for (const std::string& cuda_root : tensorflow::CandidateCudaRoots(
-             hlo_module_config.debug_options().xla_gpu_cuda_data_dir())) {
-      std::string libdevice_dir =
-          tensorflow::io::JoinPath(cuda_root, "nvvm", "libdevice");
-      VLOG(2) << "Looking for libdevice at " << libdevice_dir;
-      if (tensorflow::Env::Default()->IsDirectory(libdevice_dir).ok()) {
-        VLOG(2) << "Found libdevice dir " << libdevice_dir;
-        return libdevice_dir;
-      }
-    }
-    return InternalError(
-        "Can't find libdevice directory ${CUDA_DIR}/nvvm/libdevice");
   }
 };
 

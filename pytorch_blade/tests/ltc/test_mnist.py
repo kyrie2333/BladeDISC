@@ -16,7 +16,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.testing import assert_allclose
-from tests.disc.testing_base import skipTorchLT
+from tests.disc.testing_base import skipTorchNE
 from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import StepLR
 import torch_blade
@@ -25,6 +25,7 @@ import pytest
 if torch_blade._is_ltc_available:
     import torch._lazy as ltc
     torch_blade.init_ltc_disc_backend()
+
 import unittest
 
 LOG_INTERVAL=100
@@ -88,6 +89,7 @@ def run_test(model, device, test_loader):
         100. * correct / len(test_loader.dataset)))
     return correct * 1.0 / len(test_loader.dataset)
 
+@skipTorchNE("1.12.0")
 class TestMnist(unittest.TestCase):
     def mnit(self, device):
         torch.manual_seed(2)
@@ -120,7 +122,6 @@ class TestMnist(unittest.TestCase):
 
         return test_acc
 
-    @skipTorchLT("1.12.0")
     def test_acc(self):
         lazy_device = torch.device('lazy')
         device = torch.device('cpu')

@@ -9,15 +9,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "tensorflow/compiler/mlir/disc/tests/mlir_feature_test.h"
-#include "tensorflow/compiler/mlir/disc/tests/mlir_test.h"
+#include "mlir/disc/tests/mlir_feature_test.h"
+#include "mlir/disc/tests/mlir_test.h"
 #include "tensorflow/core/platform/test.h"
 #include "tensorflow/core/util/env_var.h"
 
 namespace mlir_test {
 
-const std::string c_ft_path =
-    "tensorflow/compiler/mlir/disc/tests/regression/data/";
+const std::string c_ft_path = "mlir/disc/tests/regression/data/";
 
 // The column size is small enough to enable warp-wise reduction schedule.
 TEST(KStitchFusionGPUTest, KStitchSimpleSmallColumnF32) {
@@ -173,6 +172,48 @@ TEST(KStitchFusionGPUTest, KStitchSimpleWithTransposeF32) {
   unsetenv("DISC_EXPECTED_KERNELS_IN_UT");
 }
 
+// The column size is large to enable block-wise reduction schedule.
+TEST(KStitchFusionGPUTest, KStitchElemwiseShmCacheLarge) {
+  setenv("DISC_ENABLE_SHAPE_CONSTRAINT_IR", "true", 1);
+  setenv("DISC_MEM_INTENSIVE_OPT_EXPERIMENTAL", "true", 1);
+  setenv("DISC_ENABLE_STITCH", "true", 1);
+  setenv("DISC_EXPECTED_KERNELS_IN_UT", "1", 1);
+  EXPECT_TRUE(feature_test_main(
+      /*mlir_file_path*/ c_ft_path +
+          "kstitch_fusion_elemwise_shm_cache_large.mlir",
+      /*backend_types*/ {BackendType::kCuda},
+      /*num_inputs*/ 3,
+      /*num_outputs*/ 4,
+      /*input_descriptors*/
+      {"96x512x512xf16_X", "8x12x512x512xf16_X", "8x12x512x512xf32_X"},
+      /*output_descriptors*/ {"f16_X", "f32_X", "f32_X", "f16_X"}));
+  unsetenv("DISC_EXPECTED_KERNELS_IN_UT");
+  unsetenv("DISC_ENABLE_STITCH");
+  unsetenv("DISC_MEM_INTENSIVE_OPT_EXPERIMENTAL");
+  unsetenv("DISC_ENABLE_SHAPE_CONSTRAINT_IR");
+}
+
+// The column size is small to enable warp-wise reduction schedule.
+TEST(KStitchFusionGPUTest, KStitchElemwiseShmCacheSmall) {
+  setenv("DISC_ENABLE_SHAPE_CONSTRAINT_IR", "true", 1);
+  setenv("DISC_MEM_INTENSIVE_OPT_EXPERIMENTAL", "true", 1);
+  setenv("DISC_ENABLE_STITCH", "true", 1);
+  setenv("DISC_EXPECTED_KERNELS_IN_UT", "1", 1);
+  EXPECT_TRUE(feature_test_main(
+      /*mlir_file_path*/ c_ft_path +
+          "kstitch_fusion_elemwise_shm_cache_small.mlir",
+      /*backend_types*/ {BackendType::kCuda},
+      /*num_inputs*/ 3,
+      /*num_outputs*/ 4,
+      /*input_descriptors*/
+      {"96x512x64xf16_X", "8x12x512x64xf16_X", "8x12x512x64xf32_X"},
+      /*output_descriptors*/ {"f16_X", "f32_X", "f32_X", "f16_X"}));
+  unsetenv("DISC_EXPECTED_KERNELS_IN_UT");
+  unsetenv("DISC_ENABLE_STITCH");
+  unsetenv("DISC_MEM_INTENSIVE_OPT_EXPERIMENTAL");
+  unsetenv("DISC_ENABLE_SHAPE_CONSTRAINT_IR");
+}
+
 // multi-outputs
 TEST(KStitchFusionCPUTest, MultiOutputs) {
   std::vector<float> input_val;
@@ -181,6 +222,7 @@ TEST(KStitchFusionCPUTest, MultiOutputs) {
   }
   setenv("DISC_ENABLE_STITCH", "true", 1);
   setenv("DISC_EXPECTED_KERNELS_IN_UT", "1", 1);
+  setenv("DISC_ENABLE_SHAPE_CONSTRAINT_IR", "true", 1);
   EXPECT_TRUE(feature_test_main(
       /*mlir_file_path*/ c_ft_path + "kstitch_fusion_cpu_multioutputs.mlir",
       /*backend_types*/ kSupportedCPUBackendList,
@@ -190,5 +232,7 @@ TEST(KStitchFusionCPUTest, MultiOutputs) {
       /*output_descriptors*/ {"f32_X", "f32_X"}, {input_val}));
   unsetenv("DISC_ENABLE_STITCH");
   unsetenv("DISC_EXPECTED_KERNELS_IN_UT");
+  unsetenv("DISC_ENABLE_SHAPE_CONSTRAINT_IR");
 }
+
 }  // namespace mlir_test

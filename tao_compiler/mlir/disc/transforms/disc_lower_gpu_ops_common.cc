@@ -13,10 +13,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "tensorflow/compiler/mlir/disc/transforms/disc_lower_gpu_ops_common.h"
+#include "mlir/disc/transforms/disc_lower_gpu_ops_common.h"
 
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
-#include "mlir/IR/BlockAndValueMapping.h"
+#include "mlir/IR/IRMapping.h"
 #include "mlir/Support/LogicalResult.h"
 
 namespace mlir {
@@ -70,9 +70,9 @@ LogicalResult GenericAtomicRMWOpLoweringWithBitcast::matchAndRewrite(
 
   // Compute the loaded value and branch to the loop block.
   rewriter.setInsertionPointToEnd(initBlock);
-  auto memRefType = atomicOp.memref().getType().cast<MemRefType>();
-  auto dataPtr = getStridedElementPtr(loc, memRefType, adaptor.memref(),
-                                      adaptor.indices(), rewriter);
+  auto memRefType = atomicOp.getMemref().getType().cast<MemRefType>();
+  auto dataPtr = getStridedElementPtr(loc, memRefType, adaptor.getMemref(),
+                                      adaptor.getIndices(), rewriter);
   Value init = rewriter.create<LLVM::LoadOp>(loc, dataPtr);
   rewriter.create<LLVM::BrOp>(loc, init, loopBlock);
 
@@ -81,9 +81,9 @@ LogicalResult GenericAtomicRMWOpLoweringWithBitcast::matchAndRewrite(
 
   // Clone the memref::GenericAtomicRMWOp region and extract the result.
   auto loopArgument = loopBlock->getArgument(0);
-  BlockAndValueMapping mapping;
+  IRMapping mapping;
   mapping.map(atomicOp.getCurrentValue(), loopArgument);
-  Block& entryBlock = atomicOp.atomic_body().front();
+  Block& entryBlock = atomicOp.getAtomicBody().front();
   for (auto& nestedOp : entryBlock.without_terminator()) {
     Operation* clone = rewriter.clone(nestedOp, mapping);
     mapping.map(nestedOp.getResults(), clone->getResults());
@@ -104,7 +104,17 @@ LogicalResult GenericAtomicRMWOpLoweringWithBitcast::matchAndRewrite(
   LLVM::LLVMStructType mayCastedPairType = pairType;
   Value mayCastedLoopArgument = loopArgument;
   Value mayCastedResult = result;
-  if (valueType.isF32()) {
+  if (valueType.isF16()) {
+    mayCastedType = rewriter.getI16Type();
+    mayCastedDataPtr = rewriter.create<LLVM::BitcastOp>(
+        loc, LLVM::LLVMPointerType::get(mayCastedType), dataPtr);
+    mayCastedPairType = LLVM::LLVMStructType::getLiteral(
+        rewriter.getContext(), {mayCastedType, boolType});
+    mayCastedLoopArgument =
+        rewriter.create<LLVM::BitcastOp>(loc, mayCastedType, loopArgument);
+    mayCastedResult =
+        rewriter.create<LLVM::BitcastOp>(loc, mayCastedType, result);
+  } else if (valueType.isF32()) {
     mayCastedType = rewriter.getI32Type();
     mayCastedDataPtr = rewriter.create<LLVM::BitcastOp>(
         loc, LLVM::LLVMPointerType::get(mayCastedType), dataPtr);

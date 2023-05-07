@@ -16,7 +16,7 @@ limitations under the License.
 #define TENSORFLOW_COMPILER_MLIR_HLO_INCLUDE_MLIR_HLO_DIALECT_MHLO_IR_HLO_DISC_OPS_H_
 
 #include "llvm/ADT/StringRef.h"
-#include "mlir-hlo/Dialect/mhlo/IR/hlo_ops.h"
+#include "mhlo/IR/hlo_ops.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/BuiltinTypes.h"
@@ -30,6 +30,7 @@ limitations under the License.
 #include "mlir/IR/Types.h"
 #include "mlir/Interfaces/InferTypeOpInterface.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
+#include "mlir/disc/IR/hlo_disc_enums.h.inc"
 
 namespace mlir {
 class OpBuilder;
@@ -40,6 +41,11 @@ class CustomCallOp;
 class MhloDiscDialect : public Dialect {
  public:
   explicit MhloDiscDialect(MLIRContext* context);
+  // Registered hook to materialize a constant operation from a given attribute
+  // value with the desired resultant type.
+  Operation* materializeConstant(OpBuilder& builder, Attribute value, Type type,
+                                 Location loc) override;
+
   static StringRef getDialectNamespace() { return "mhlo_disc"; }
   /*
   // Parses a type registered to this dialect.
@@ -53,6 +59,6 @@ class MhloDiscDialect : public Dialect {
 }  // end namespace mlir
 
 #define GET_OP_CLASSES
-#include "tensorflow/compiler/mlir/disc/IR/hlo_disc_ops.h.inc"
+#include "mlir/disc/IR/hlo_disc_ops.h.inc"
 
 #endif  //  TENSORFLOW_COMPILER_MLIR_HLO_INCLUDE_MLIR_HLO_DIALECT_MHLO_IR_HLO_DISC_OPS_H_

@@ -14,8 +14,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 // ============================================================================
-#include "tensorflow/compiler/mlir/xla/ral/context/base/cpu/cpu_context_impl.h"
+#include "mlir/xla/ral/context/base/cpu/cpu_context_impl.h"
 
+#include <cassert>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -25,11 +26,11 @@
 #include <unordered_set>
 #include <vector>
 
-#include "tensorflow/compiler/mlir/xla/ral/context/common_context_impl.h"
-#include "tensorflow/compiler/mlir/xla/ral/context/context_util.h"
-#include "tensorflow/compiler/mlir/xla/ral/ral_driver.h"
-#include "tensorflow/compiler/mlir/xla/ral/ral_helper.h"
-#include "tensorflow/compiler/mlir/xla/ral/ral_logging.h"
+#include "mlir/xla/ral/context/common_context_impl.h"
+#include "mlir/xla/ral/context/context_util.h"
+#include "mlir/xla/ral/ral_driver.h"
+#include "mlir/xla/ral/ral_helper.h"
+#include "mlir/xla/ral/ral_logging.h"
 
 namespace tao {
 namespace ral {
@@ -160,6 +161,14 @@ void ral_base_cpu_dealloc(ExecutionContext* ctx, buffer_t buffer) {
   auto exec_ctx = dynamic_cast<BaseCpuExecutionContext*>(ctx);
 
   std::lock_guard<std::mutex> lock(state->mu);
+
+  // ignore persistent buffer.
+  if (state->host_persistent_buffers.count(buffer)) {
+    TAO_VLOG(1) << "ral_base_cpu_dealloc: ignore persistent buffer = "
+                << buffer;
+    return;
+  }
+
   TAO_VLOG(1) << "before ral_base_cpu_dealloc with ptr = " << buffer;
   auto it = exec_ctx->host_ptr_map.find(buffer);
   if (it != exec_ctx->host_ptr_map.end() && --it->second == 0) {
@@ -405,7 +414,7 @@ RAL_REGISTER_BITCAST_FUNC(bool, 8);
 }  // namespace tao
 
 #ifdef TAO_RAL_USE_STREAM_EXECUTOR
-#include "tensorflow/compiler/mlir/xla/ral/context/stream_executor_based_impl.h"
+#include "mlir/xla/ral/context/stream_executor_based_impl.h"
 namespace tao {
 namespace ral {
 namespace cpu {

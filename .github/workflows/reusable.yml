@@ -12,6 +12,10 @@ on:
       device:
         required: true
         type: string
+      timeout_minutes:
+        required: false
+        type: number
+        default: 360
       dockerfile:
         required: true
         type: string
@@ -33,6 +37,9 @@ on:
       remote_dev_docker:
         required: true
         type: string
+      proxy_config:
+        required: false
+        type: string
     secrets:
       ALIYUN_DOCKER_USERNAME:
         required: false
@@ -42,12 +49,19 @@ on:
         required: false
       DOCKER_PASSWORD:
         required: false
+      OSS_ENDPOINT:
+        required: false
+      OSS_AK:
+        required: false
+      OSS_SK:
+        required: false
 
 jobs:
   Job:
     if: github.repository == 'alibaba/BladeDISC'
     # The type of runner that the job will run on
     runs-on: [self-hosted, "${{ inputs.device }}" ]
+    timeout-minutes: ${{inputs.timeout_minutes}}
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
     # Runs a single command using the runners shell
@@ -56,12 +70,13 @@ jobs:
     - name: Build Docker
       run: |
         set -e
+        ${{ inputs.proxy_config }}
         git submodule sync
         git submodule update --depth=1 --init --recursive
+        docker pull ${{ inputs.base_image }}
         docker build -t disc-dev-${{ inputs.name }} \
           --build-arg BASEIMAGE=${{ inputs.base_image }} \
           ${{ inputs.extra_build_args }} \
-          ${{ inputs.extra_envs }} \
           -f ${{ inputs.dockerfile }} .
     - name: Run Job 
       run: |
@@ -74,6 +89,10 @@ jobs:
           -v $PWD:/disc \
           -e GITHUB_WORKFLOW=$GITHUB_WORKFLOW \
           ${{ inputs.extra_envs }} \
+          -e OSS_ENDPOINT=${{ secrets.OSS_ENDPOINT }} \
+          -e OSS_AK=${{ secrets.OSS_AK }} \
+          -e OSS_SK=${{ secrets.OSS_SK }} \
+          -e GH_TOKEN=${{ secrets.BENCHMARK_GH_TOKEN}} \
           -w /disc \
           disc-dev-${{ inputs.name }} ${{ inputs.exec_command }}
     - name: Push Docker Image

@@ -204,7 +204,7 @@ def num_compiled_nodes(script_module, group_type):
     return [int(p.search(s).group(0)) for s, _ in collect_engines(script_module, group_type)]
 
 
-def parse_version(version: str) -> (int, int, int):
+def parse_version(version: str):
     """
     Parses a version string into (major, minor, patch) version numbers.
 
@@ -222,7 +222,7 @@ def parse_version(version: str) -> (int, int, int):
             version_number_str = version[:i]
             break
 
-    return tuple([int(n) for n in version_number_str.split(".")])
+    return tuple([int(n) for n in version_number_str.split(".")[:3]])
 
 def torch_version_number():
     return parse_version(torch.__version__)
@@ -267,3 +267,23 @@ def disable_pytorch_jit():
     torch._C._jit_set_profiling_mode(False)
     torch._C._jit_set_texpr_fuser_enabled(False)
     torch._C._jit_set_nvfuser_enabled(False)
+
+def _inline_node_with_subgraph(graph, old_node, subgraph):
+    value_map = dict()
+    for sbg_inp, inp in zip(subgraph.inputs(), old_node.inputs()):
+        value_map[sbg_inp] = inp
+
+    for sbg_node in graph_node_topolist(subgraph):
+        new_node = graph.createClone(sbg_node, lambda x: value_map[x])
+        # append new node to graph
+        graph.appendNode(new_node)
+        new_node.moveBefore(old_node)
+        for sbg_out, out in zip(sbg_node.outputs(), new_node.outputs()):
+            value_map[sbg_out] = out
+    outputs = []
+    for sbg_out, grp_out in zip(subgraph.outputs(), old_node.outputs()):
+        grp_out.replaceAllUsesWith(value_map[sbg_out])
+        outputs.append(value_map[sbg_out])
+
+    old_node.destroy()
+    return outputs

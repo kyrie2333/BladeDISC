@@ -149,7 +149,8 @@ class TestDiscBinaryOps(DiscTestCase):
         self._test_binary_type_promotion(torch.mul)
         if utils.torch_version_number() >= utils.parse_version("1.6.1"):
             self._test_binary_type_promotion(torch.true_divide)
-        self._test_binary_type_promotion(torch.floor_divide)
+        if utils.torch_version_number() < utils.parse_version("1.13.0"):
+            self._test_binary_type_promotion(torch.floor_divide)
         if not isTorchMlirEnable():
             self._test_binary_type_promotion(torch.rsub)
             self._test_func(torch.logical_and)
@@ -161,8 +162,9 @@ class TestDiscBinaryOps(DiscTestCase):
         self._test_func(torch.mul)
         # torch.aten.div between Tensor[int]s meet RefineType error in TorchMLIR
         if utils.torch_version_number() >= utils.parse_version("1.6.1"):
-            self._test_func(torch.true_divide, test_int=not isTorchMlirEnable())
-        self._test_func(torch.floor_divide, test_int=not isTorchMlirEnable())
+            self._test_func(torch.true_divide, test_int=True)
+        if utils.torch_version_number() < utils.parse_version("1.13.0"):
+            self._test_func(torch.floor_divide, test_int=True)
         if not isTorchMlirEnable():
             self._test_func(torch.rsub)
             self._test_func(torch.logical_and)
@@ -225,10 +227,10 @@ class TestDiscBinaryOps(DiscTestCase):
         if not isTorchMlirEnable():
             self._test_logic_func(logical_or)
 
-    @skipIfEnableTorchMlir()
     def test_pow(self):
         self._test_func(torch.pow)
-        self._test_scalar_func(torch.pow)
+        if not isTorchMlirEnable():
+            self._test_scalar_func(torch.pow)
 
     def _test_cmp_func(self, torch_func):
         @torch.jit.script
@@ -236,7 +238,6 @@ class TestDiscBinaryOps(DiscTestCase):
             return torch_func(x, 2.0), torch_func(y, 2.0)
         self._test_func(func)
 
-    @skipIfEnableTorchMlir()
     def test_gt(self):
         self._test_func(torch.gt)
         self._test_binary_type_promotion(torch.gt)
@@ -269,7 +270,9 @@ class TestDiscBinaryOps(DiscTestCase):
         self._test_binary_type_promotion(torch.lt)
         self._test_cmp_func(torch.lt)
 
-    @skipIfEnableTorchMlir()
+    def test_max(self):
+        self._test_func(torch.max)
+
     def test_arange(self):
         # Given int dtype.
         @torch.jit.script

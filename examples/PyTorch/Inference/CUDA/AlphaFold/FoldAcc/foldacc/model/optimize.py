@@ -10,6 +10,7 @@
 # limitations under the License.
 
 import torch
+import copy
 import logging
 import os
 from shutil import copyfile
@@ -104,7 +105,8 @@ def optimize_module(
     enable_disc=True, 
     enable_amp=True,
     enable_trace=True,
-    dtype=torch.float, 
+    dtype=torch.float,
+    trace_check_tolerance=1e-5,
     save_dir="tmp",
     load_dir="tmp",
     name="evoformer",
@@ -114,6 +116,7 @@ def optimize_module(
         if optimize_config is None:
             optimize_config = generate_config(enable_disc=enable_disc, enable_amp=enable_amp, 
                 enable_trace=enable_trace, dtype=dtype, device=device)
+        optimize_config.trace_check_tolerance = trace_check_tolerance
 
         if hasattr(model, "blocks"):
             org_blocks = model.blocks
@@ -137,9 +140,11 @@ def optimize_module(
                     is_load = True
             
             if not is_load:
-                optimized_block = optimize(block, dummy_inputs, optimize_config)
+                optimize_inputs = copy.deepcopy(dummy_inputs)
+                optimized_block = optimize(block, optimize_inputs, optimize_config)
 
-            block_output = optimized_block(*dummy_inputs)
+            optimize_inputs = copy.deepcopy(dummy_inputs)
+            block_output = optimized_block(*optimize_inputs)
             if isinstance(block_output, torch.Tensor):
                 dummy_inputs = tuple([block_output] + list(dummy_inputs[1:]))
             else:

@@ -10,17 +10,18 @@
 # limitations under the License.
 
 import argparse
-import os
-import time
-import subprocess
-import shutil
-import logging
-import sys
-import re
 import json
-from subprocess import Popen, PIPE, STDOUT
+import logging
+import os
+import pickle
+import re
+import shutil
+import subprocess
+import sys
+import time
 from contextlib import contextmanager
 from datetime import datetime
+from subprocess import PIPE, STDOUT, Popen
 
 
 class StageTiming:
@@ -260,11 +261,17 @@ def mkl_install_dir(root):
 def acl_root_dir(root):
     return os.path.join(mkldnn_build_dir(root), 'acl', 'ComputeLibrary')
 
+def extra_acl_patch_dir(root):
+    if root is None:
+        root = get_source_root_dir()
+    return os.path.join(root, "third_party", "bazel", "acl")
+
 def config_mkldnn(root, args):
     build_dir = mkldnn_build_dir(root)
     ensure_empty_dir(build_dir, clear_hidden=False)
     mkl_dir = mkl_install_dir(root)
     acl_dir = acl_root_dir(root)
+    acl_patch_dir = extra_acl_patch_dir(root)
     ensure_empty_dir(mkl_dir, clear_hidden=False)
     ensure_empty_dir(acl_dir, clear_hidden=False)
     if args.x86:
@@ -272,8 +279,12 @@ def config_mkldnn(root, args):
             # download mkl-lib/include
             download_cmd = """
               unset HTTPS_PROXY
-              curl -fsSL https://pai-blade.oss-accelerate.aliyuncs.com/build_deps/mkl/mkl-static-2022.0.1-intel_117.tar.bz2 | tar xjv
-              curl -fsSL https://pai-blade.oss-accelerate.aliyuncs.com/build_deps/mkl/mkl-include-2022.0.1-h8d4b97c_803.tar.bz2 | tar xjv
+              wget -nv https://pai-blade.oss-accelerate.aliyuncs.com/build_deps/mkl/mkl-static-2022.0.1-intel_117.tar.bz2 -O mkl-static-2022.0.1-intel_117.tar.bz2
+              tar xjvf mkl-static-2022.0.1-intel_117.tar.bz2
+	      rm -rf mkl-static-2022.0.1-intel_117.tar.bz2
+              wget -nv https://pai-blade.oss-accelerate.aliyuncs.com/build_deps/mkl/mkl-include-2022.0.1-h8d4b97c_803.tar.bz2 -O mkl-include-2022.0.1-h8d4b97c_803.tar.bz2
+              tar xjvf mkl-include-2022.0.1-h8d4b97c_803.tar.bz2
+	      rm -rf mkl-include-2022.0.1-h8d4b97c_803.tar.bz2
             """
             execute(download_cmd)
 
@@ -286,13 +297,21 @@ def config_mkldnn(root, args):
               MAKE_NP="-j$(grep -c processor /proc/cpuinfo)"
 
               ACL_DIR={}
-              git clone --branch v22.02 --depth 1 $ACL_REPO $ACL_DIR
+              git clone --branch v23.02.1 --depth 1 $ACL_REPO $ACL_DIR
               cd $ACL_DIR
+              EXTRA_ACL_PATCH_DIR={}
+              for file in $EXTRA_ACL_PATCH_DIR/acl_*.patch
+              do
+                  if [[ $file == *makefile* ]]; then
+                      continue
+                  fi
+                  patch -p1 < $file
+              done
 
               scons --silent $MAKE_NP Werror=0 debug=0 neon=1 opencl=0 openmp=1 embed_kernels=0 os=linux arch={} build=native extra_cxx_flags="-fPIC"
 
               exit $?
-            '''.format(acl_dir, arch)
+            '''.format(acl_dir, acl_patch_dir, arch)
             execute(cmd)
             # a workaround for static linking
             execute('rm -f build/*.so')
@@ -303,7 +322,6 @@ def config_mkldnn(root, args):
     with cwd(build_dir):
         cc = which("gcc")
         cxx = which("g++")
-        # always link patine statically
         flags = " -DMKL_ROOT={} ".format(mkl_dir)
         envs = " CC={} CXX={} ".format(cc, cxx)
         if args.aarch64:
@@ -335,6 +353,10 @@ def is_x86():
 def is_aarch64():
     import platform
     return platform.processor() == 'aarch64'
+
+def num_make_jobs():
+    cpu_cnt = os.cpu_count() or 1
+    return min(max(1, cpu_cnt - 1), 32)
 
 def auto_detect_host_cpu(args):
     if not hasattr(args, 'x86') or not args.x86:
@@ -528,7 +550,60 @@ def internal_tao_bridge_dir():
 def link_dirs(dst_dir, src_dir):
     execute("rm -rf {0} && ln -s {1} {0}".format(dst_dir, src_dir))
 
-def symlink_disc_files(is_platform_alibaba):
+def try_import_from_platform_alibaba(module_name, disc_root=None):
+    if disc_root is None:
+        root = internal_root_dir()
+    else:
+        root = os.path.join(disc_root, os.path.pardir)
+    build_scripts_dir = os.path.join(root, "platform_alibaba", "scripts", "python")
+    sys.path.insert(0, build_scripts_dir)
+    m = None
+    try:
+        import importlib
+        m = importlib.import_module(module_name)
+    except Exception as e:
+        pass
+    finally:
+        sys.path.pop(0)
+    return m
+
+
+def add_arguments_platform_alibaba(parser):
+    m = try_import_from_platform_alibaba("common_setup_internal")
+    if not m: return
+    m.add_arguments(parser)
+
+
+def symlink_disc_files_platform_alibaba(args):
+    m = try_import_from_platform_alibaba("common_setup_internal")
+    if not m: return
+    m.symlink_disc_files(args)
+
+
+def configure_bridge_platform_alibaba(root, args):
+    m = try_import_from_platform_alibaba("common_setup_internal")
+    if not m: return
+    m.configure_bridge(root, args)
+
+
+def configure_compiler_platform_alibaba(root, args):
+    m = try_import_from_platform_alibaba("common_setup_internal")
+    if not m: return
+    m.configure_compiler(root, args)
+
+def build_tao_compiler_add_flags_platform_alibaba(root, args, flag):
+    m = try_import_from_platform_alibaba("common_setup_internal", root)
+    if not m: return flag
+    return m.build_tao_compiler_add_flags(root, args, flag)
+
+
+def test_tao_compiler_add_flags_platform_alibaba(root, args, flag):
+    m = try_import_from_platform_alibaba("common_setup_internal", root)
+    if not m: return flag
+    return m.test_tao_compiler_add_flags(root, args, flag)
+
+
+def symlink_disc_files(args):
     dir_tf_community = os.path.join(get_source_root_dir(), "tf_community")
     dir_platform_alibaba = os.path.join(internal_root_dir(), "platform_alibaba")
 
@@ -549,39 +624,33 @@ def symlink_disc_files(is_platform_alibaba):
                 os.makedirs(dst_folder)
             execute("rm -rf {0} && ln -s {1} {0}".format(link_in_tf, src_file))
 
-    logger.info("linking ./tao to tf_community/tao")
+    logger.info("linking ./tao to tao_compiler/tao")
     execute(
         "rm -rf {0} && ln -s {1} {0}".format(
-            os.path.join(get_source_root_dir(), "tf_community", "tao"),
+            os.path.join(get_source_root_dir(), "tao_compiler", "tao"),
             os.path.join(get_source_root_dir(), "tao")
         )
     )
 
-    logger.info("linking PatineClient")
-    link_dirs(os.path.join(dir_tf_community, 'tao', 'third_party', 'PatineClient'),
-            os.path.join(dir_platform_alibaba, 'third_party', 'PatineClient'))
     logger.info("linking blade_gemm")
-    link_dirs(os.path.join(get_source_root_dir(), 'tf_community', 'tao', 'blade_gemm'),
+    link_dirs(os.path.join(get_source_root_dir(), 'tao', 'blade_gemm'),
             os.path.join(dir_platform_alibaba, 'blade_gemm'))
     logger.info("linking blade_service_common")
-    link_dirs(os.path.join(get_source_root_dir(), 'tf_community', 'tao', 'third_party', 'blade_service_common'),
+    link_dirs(os.path.join(get_source_root_dir(), 'tao', 'third_party', 'blade_service_common'),
             os.path.join(dir_platform_alibaba, 'third_party', 'blade_service_common'))
 
     logger.info("cleanup tao_compiler with XLA always...")
-    src = os.path.join(dir_platform_alibaba, "tao_compiler", "xla")
-    dst = os.path.join(get_source_root_dir(), "tf_community/tensorflow/compiler/decoupling_xla")
-    link_dirs(dst, src)
 
     # def link_internal_tao_bridge(is_platform_alibaba):
-    # softlink ["tao_launch_op", "gpu"] dirs, "tvm" and "transform" dirs are not needed for now.
+    # softlink ["tao_launch_op", "gpu"] dirs, and "transform" dirs are not needed for now.
     for dir_name in ["tao_launch_op", "gpu"]:
         src_file = os.path.join(internal_tao_bridge_dir(), dir_name)
         link_in_bridge = os.path.join(tao_bridge_dir(), dir_name)
-        if is_platform_alibaba:
+        if args.platform_alibaba:
             link_dirs(link_in_bridge, src_file)
         else:
             execute("rm -rf {0}".format(link_in_bridge))
-    if is_platform_alibaba:
+    if args.platform_alibaba:
         logger.info("linking blade_service_common bazel files")
         src_dir = os.path.join(internal_root_dir(), "platform_alibaba", "bazel", "blade_service_common")
         dst_dir = os.path.join(get_source_root_dir(), "third_party", "bazel", "blade_service_common")
@@ -589,25 +658,88 @@ def symlink_disc_files(is_platform_alibaba):
         for f in files:
             link_dirs(os.path.join(dst_dir, f), os.path.join(src_dir, f))
 
+    symlink_disc_files_platform_alibaba(args)
+
+
+def symlink_disc_files_deprecated(is_platform_alibaba):
+    args = argparse.Namespace()
+    setattr(args, "platform_alibaba", is_platform_alibaba)
+    symlink_disc_files(args)
 
 def add_ral_link_if_not_exist():
     root = get_source_root_dir()
     RAL_DIR_IN_TF = "tao_compiler/mlir/xla"
-    PROTO = "compile_metadata.proto"
     RAL_DIR_IN_BRIDGE = os.path.join(tao_ral_dir(), "tensorflow/compiler/mlir/xla")
     if os.path.exists(RAL_DIR_IN_BRIDGE):
         shutil.rmtree(RAL_DIR_IN_BRIDGE)
     os.makedirs(RAL_DIR_IN_BRIDGE)
     with cwd(RAL_DIR_IN_BRIDGE):
         execute("ln -s {0}/{1}/ral ral".format(root, RAL_DIR_IN_TF))
-        execute("ln -s {0}/{1}/ral/{2} {2}".format(root, RAL_DIR_IN_TF, PROTO))
 
 
 def get_version_file():
     root = get_source_root_dir()
     return os.path.join(root, "VERSION")
 
-if __name__ == "__main__":
+def add_arguments_common(parser):
+    parser.add_argument(
+        "--cpu_only",
+        required=False,
+        action="store_true",
+        help="Build tao with cpu support only",
+    )
+    parser.add_argument(
+        "--aarch64",
+        required=False,
+        action="store_true",
+        help="Build tao with aarch64 support only",
+    )
+    parser.add_argument(
+        "--dcu",
+        required=False,
+        action="store_true",
+        help="Build tao with dcu support only",
+    )
+    parser.add_argument(
+        "--rocm",
+        required=False,
+        action="store_true",
+        help="Build tao with rocm support only",
+    )
+    parser.add_argument(
+        "--rocm_path",
+        required=False,
+        default=None,
+        help="Build tao where rocm locates",
+    )
+    parser.add_argument(
+        "--platform_alibaba", action="store_true", help="build with is_platform_alibaba=True"
+    )
+    parser.add_argument(
+        "--target_cpu_arch",
+        required=False,
+        default="",
+        help="Specify the target architecture.",
+    )
+    add_arguments_platform_alibaba(parser)
+
+def disc_conf_file(root):
+    return os.path.join(root, "scripts", "ci", ".disc_conf")
+
+def save_args_to_cache(root, args):
+    """Save confs to `disc_conf_file()`"""
+    with open(disc_conf_file(root), "wb") as f:
+        pickle.dump(args, f)
+
+def restore_args_from_cache(root, args):
+    """Restore confs from `disc_conf_file()`"""
+    with open(disc_conf_file(root), "rb") as f:
+        args_tmp = pickle.load(f)
+        for k, v in args_tmp.__dict__.items():
+            setattr(args, k, v)
+
+
+def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--cxx11_abi",
@@ -615,21 +747,38 @@ if __name__ == "__main__":
         action="store_true",
         help="Build with cxx11 abi or not",
     )
-    parser.add_argument(
-        "--cpu_only",
-        required=False,
-        action="store_true",
-        help="Build tao with cpu support only",
-    )
+    add_arguments_common(parser)
     args = parser.parse_args()
     # backward compatibility
     args.ral_cxx11_abi = args.cxx11_abi
     update_cpu_specific_setting(args)
+    return args
+
+
+def build_tao_compiler_add_flags_platform_alibaba_cached(root, flag):
+    args = argparse.Namespace()
+    restore_args_from_cache(root, args)
+    return build_tao_compiler_add_flags_platform_alibaba(root, args, flag)
+
+
+def test_tao_compiler_add_flags_platform_alibaba_cached(root, flag):
+    args = argparse.Namespace()
+    restore_args_from_cache(root, args)
+    return test_tao_compiler_add_flags_platform_alibaba(root, args, flag)
+
+def cleanup_building_env(root):
+    with cwd(root):
+        execute("rm -rf tf_community/.tf_configure.bazelrc")
+
+if __name__ == "__main__":
+    args = parse_args()
 
     root = get_source_root_dir()
-    symlink_disc_files(False)
+    cleanup_building_env(root)
+    symlink_disc_files(args)
 
     if args.enable_mkldnn:
         config_mkldnn(root, args)
         build_mkldnn(root)
 
+    save_args_to_cache(root, args)

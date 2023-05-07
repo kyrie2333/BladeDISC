@@ -1503,30 +1503,33 @@ Status MarkForCompilationPassImpl::FindCompilationCandidates() {
           continue;
         }
       }
+    }
 
-      bool to_continue = false;
-      for (auto s : absl::StrSplit(
-               GetTaoBridgeOptions()->op_type_clustering_black_list, ',')) {
-        if (s == node->type_string()) {
-          VLOG(2) << "Rejecting " << node->type_string()
-                  << " as op type black list";
-          to_continue = true;
-          break;
-        }
+    bool to_continue = false;
+    for (auto s :
+         absl::StrSplit(GetTaoBridgeOptions()->op_type_clustering_black_list,
+                        ',', absl::SkipEmpty())) {
+      if (s == node->type_string()) {
+        VLOG(2) << "Rejecting " << node->type_string()
+                << " as op type black list";
+        to_continue = true;
+        break;
       }
+    }
 
-      for (auto s : absl::StrSplit(
-               GetTaoBridgeOptions()->op_name_clustering_black_list, ',')) {
-        if (s != "" && node->name().find(s.data()) != std::string::npos) {
-          VLOG(2) << "Rejecting " << node->name() << " as op name black list";
-          to_continue |= true;
-          break;
-        }
+    for (auto s :
+         absl::StrSplit(GetTaoBridgeOptions()->op_name_clustering_black_list,
+                        ',', absl::SkipEmpty())) {
+      // if (s != "" && node->name().find(s.data()) != std::string::npos) {
+      if (absl::StrContains(node->name(), s)) {
+        VLOG(2) << "Rejecting " << node->name() << " as op name black list";
+        to_continue |= true;
+        break;
       }
+    }
 
-      if (to_continue) {
-        continue;
-      }
+    if (to_continue) {
+      continue;
     }
 
     // This is used to fix some corner cases of our clustering strategy.
@@ -2574,7 +2577,9 @@ std::vector<string> GetDiscSupportedOps() {
     "ConcatV2",
     "Const",
     "Conv2D",
+    "Cos",
     "DepthwiseConv2dNative",
+    "DiscFakeQuant",
     "DynamicStitch",
     "Equal",
     "Erf",
@@ -2594,10 +2599,10 @@ std::vector<string> GetDiscSupportedOps() {
     "Less",
     "LessEqual",
     "Log",
+    "LogSoftmax",
     "LogicalAnd",
     "LogicalNot",
     "LogicalOr",
-    "LogSoftmax",
     "MatMul",
     "Max",
     "Maximum",
@@ -2627,6 +2632,7 @@ std::vector<string> GetDiscSupportedOps() {
     "Sigmoid",
     "SigmoidGrad",
     "Sign",
+    "Sin",
     "Size",
     "Slice",
     "Snapshot",
@@ -2672,6 +2678,15 @@ std::vector<string> GetDiscSupportedOps() {
     "Dequantize",
     "QuantizeV2"
   });
+  if (GetTaoBridgeOptions()->experimental_enable_cpu_sparse_ops_compilation) {
+    ops.insert(ops.end(), {
+      "SparseReshape",
+      "SparseFillEmptyRows",
+      "SparseSegmentMean",
+      "SparseSegmentSum",
+      "Where",
+    });
+  }
 #if defined(TAO_AARCH64)
   // TODO(disc): support `QuantizedConv2DWithBiasAndRequantize` on other platforms
   ops.insert(ops.end(), {

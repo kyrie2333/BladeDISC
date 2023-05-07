@@ -11,18 +11,17 @@ limitations under the License.
 ==============================================================================*/
 
 // This file defines sparse gemm related custom calls.
-
-#include "mlir-hlo/Dialect/lhlo/IR/lhlo_ops.h"
-#include "mlir-hlo/Dialect/mhlo/IR/hlo_ops.h"
-#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "lhlo/IR/lhlo_ops.h"
+#include "mhlo/IR/hlo_ops.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/PatternMatch.h"
-#include "tensorflow/compiler/mlir/disc/IR/custom_call_base.h"
-#include "tensorflow/compiler/mlir/disc/IR/disc_ral_ops.h"
-#include "tensorflow/compiler/mlir/disc/IR/hlo_disc_ops.h"
-#include "tensorflow/compiler/mlir/disc/IR/lhlo_disc_ops.h"
-#include "tensorflow/compiler/mlir/disc/transforms/placement_utils.h"
+#include "mlir/disc/IR/custom_call_base.h"
+#include "mlir/disc/IR/disc_ral_ops.h"
+#include "mlir/disc/IR/hlo_disc_ops.h"
+#include "mlir/disc/IR/lhlo_disc_ops.h"
+#include "mlir/disc/transforms/placement_utils.h"
 
 namespace mlir {
 namespace mhlo_disc {
@@ -30,7 +29,7 @@ namespace mhlo_disc {
 LogicalResult reifyReturnTypeShapesSparseGemmImpl(
     CustomCallOp op, OpBuilder& builder, ValueRange operands,
     SmallVectorImpl<Value>& reifiedReturnShapes) {
-  if (op->getNumOperands() != 2 || op->getNumResults() != 1)
+  if (op->getNumOperands() < 2 || op->getNumResults() != 1)
     return op->emitError() << "mismatch #operands or #results\n";
 
   Value lhs = op->getOperand(0);
@@ -41,7 +40,7 @@ LogicalResult reifyReturnTypeShapesSparseGemmImpl(
   if (!lhsTy || !rhsTy) return op->emitError() << "not support unranked type\n";
 
   Location loc = op.getLoc();
-  auto config = op.backend_config().cast<DictionaryAttr>();
+  auto config = op.getBackendConfig().cast<DictionaryAttr>();
   int64_t lhs_contracting_dimensions =
       config.getAs<IntegerAttr>("lhs_contracting_dimensions").getInt();
   int64_t rhs_contracting_dimensions =
@@ -65,18 +64,16 @@ namespace lmhlo_disc {
 LogicalResult lowerToLibraryCallSpargeGemmImpl(CustomCallOp op,
                                                PatternRewriter& rewriter,
                                                Value ctx, Value stream_handle) {
-  if (op->getNumOperands() != 3 || op->getNumResults() != 0)
+  if (op->getNumOperands() < 3 || op->getNumResults() != 0)
     return op->emitError() << "mismatch #operands or #results\n";
-  SmallVector<Value, 2> newOperands{stream_handle};
-  // input
-  newOperands.push_back(op.getOperand(0));
-  // kernel
-  newOperands.push_back(op.getOperand(1));
-  // output
-  newOperands.push_back(op.getOperand(2));
+  SmallVector<Value> newOperands{stream_handle};
+
+  for (int i = 0; i < op->getNumOperands(); ++i) {
+    newOperands.push_back(op.getOperand(i));
+  }
 
   Location loc = op.getLoc();
-  auto config = op.backend_config().cast<DictionaryAttr>();
+  auto config = op.getBackendConfig().cast<DictionaryAttr>();
   int64_t lhs_contracting_dimensions =
       config.getAs<IntegerAttr>("lhs_contracting_dimensions").getInt();
   int64_t rhs_contracting_dimensions =

@@ -16,18 +16,22 @@ from tests.quantization import QuantizationTestCase
 from torch import nn
 from torch.testing import FileCheck
 from torch_blade import tensorrt
+from torch_blade.config import Config
 from torch_blade.clustering.support_fusion_group import supported_node_fusion
 from torch_blade.pass_manager import _optimize_common
-from torch_blade.quantization.prepare_data import (DataCollectObserver,
-                                                   DataPreparer)
+from torch_blade.quantization.prepare_data import DataCollectObserver, DataPreparer
+from torch_blade.tensorrt import is_available as is_tensorrt_available
 
 
 def prepare_for_data_collect(model):
-    optimized_c_module = _optimize_common(model._c, static_shape=False)
-    model._reconstruct(optimized_c_module)
-    graph = model._c.forward.graph
-    unsupported = tensorrt.get_unsupported_nodes(graph, q_info=None)
-    supported_node_fusion(graph, graph, unsupported, q_info=None)
+    cfg = Config.get_current_context_or_new()
+    cfg.optimization_pipeline = tensorrt.backend_name()
+    with cfg:
+        optimized_c_module = _optimize_common(model._c)
+        model._reconstruct(optimized_c_module)
+        graph = model._c.forward.graph
+        unsupported = tensorrt.get_unsupported_nodes(graph)
+        supported_node_fusion(graph, graph, unsupported)
     return model
 
 
@@ -50,6 +54,7 @@ class TestDataCollectorObserver(QuantizationTestCase):
 
 
 class TestDataPreparer(QuantizationTestCase):
+    @unittest.skipIf(not is_tensorrt_available(), "TensorRT is not available")
     def test_naive_model(self):
         class MyModel(nn.Module):
             def __init__(self):

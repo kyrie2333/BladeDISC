@@ -14,20 +14,21 @@
 
 #if defined(TAO_CPU_ONLY) && defined(TAO_ENABLE_MKLDNN)
 
+#include <array>
 #include <thread>
 
 #include "dnnl_threadpool_iface.hpp"
-#include "tensorflow/compiler/mlir/xla/ral/context/common_context_impl.h"
-#include "tensorflow/compiler/mlir/xla/ral/context/context_util.h"
-#include "tensorflow/compiler/mlir/xla/ral/context/mkldnn/ideep/ideep.hpp"
-#include "tensorflow/compiler/mlir/xla/ral/device/cpu/cpu_driver.h"
-#include "tensorflow/compiler/mlir/xla/ral/ral_base.h"
-#include "tensorflow/compiler/mlir/xla/ral/ral_helper.h"
+#include "mlir/xla/ral/context/common_context_impl.h"
+#include "mlir/xla/ral/context/context_util.h"
+#include "mlir/xla/ral/context/mkldnn/ideep/ideep.hpp"
+#include "mlir/xla/ral/device/cpu/cpu_driver.h"
+#include "mlir/xla/ral/ral_base.h"
+#include "mlir/xla/ral/ral_helper.h"
 
 #if defined(TAO_AARCH64)
 #include "arm_compute/core/Types.h"
 #include "arm_compute/runtime/NEON/NEFunctions.h"
-#include "tensorflow/compiler/mlir/xla/ral/context/common_context_impl_acl.h"
+#include "mlir/xla/ral/context/common_context_impl_acl.h"
 #endif
 
 namespace tao {
@@ -47,6 +48,9 @@ bool promoteConv1DToConv2D();
 
 // Returns true if weight prepacking is enabled.
 bool isWeightPrePackingEnabled();
+
+// Returns true if weight prepacking for matmul is enabled.
+bool isWeightPrePackingForMatMulEnabled();
 
 // Returns the maximum number of copied we can cache.
 int getWeightPrePackingCacheCapacity();
@@ -84,6 +88,162 @@ inline void hash_combine(std::size_t& seed, const T& v) {
 
 extern const std::thread::id kDiscCpuDefaultThreadId;
 
+struct OnednnGemmState : public Context::Resource {
+  using cache_type = std::unordered_map<opaque_t, std::vector<ideep::tensor>>;
+
+  ideep::tensor get_or_create_packed_bias(
+      opaque_t bias_ptr, const ideep::tensor& bias_t,
+      const dnnl::memory::desc& target_desc,
+      const ideep::attr_t& target_attr = ideep::attr_t()) {
+    return get_or_create_packed_data(packed_bias_cache, bias_ptr, bias_t,
+                                     target_desc, target_attr);
+  }
+
+  ideep::tensor get_or_create_packed_weight(
+      opaque_t weight_ptr, const ideep::tensor& weight_t,
+      const dnnl::memory::desc& target_desc,
+      const ideep::attr_t& target_attr = ideep::attr_t()) {
+    return get_or_create_packed_data(packed_weight_cache, weight_ptr, weight_t,
+                                     target_desc, target_attr);
+  }
+
+ private:
+  ideep::tensor get_or_create_packed_data(
+      cache_type& cache_tensor, opaque_t data_ptr, const ideep::tensor& data_t,
+      const dnnl::memory::desc& target_desc,
+      const ideep::attr_t& target_attr = ideep::attr_t()) {
+    std::lock_guard<std::mutex> l(mu);
+    ideep::tensor packed_tensor;
+    auto& packed_tensors = cache_tensor[data_ptr];
+    for (auto& tensor : packed_tensors) {
+      if (target_desc == tensor.get_desc()) {
+        packed_tensor = tensor;
+        break;
+      }
+    }
+    if (packed_tensor.is_empty()) {
+      packed_tensor = data_t.reorder_if_differ_in(target_desc, target_attr);
+      packed_tensors.push_back(packed_tensor);
+    }
+    return packed_tensor;
+  }
+  std::mutex mu;
+  cache_type packed_weight_cache;
+  cache_type packed_bias_cache;
+};
+
+struct GEMMParamsKeyHasher;
+
+struct GEMMParamsKey {
+  int m = -1;
+  int n = -1;
+  int k = -1;
+  int batch = 1;
+  bool transpose_a = false;
+  bool transpose_b = false;
+  opaque_t const_weight_ptr = nullptr;
+  opaque_t const_bias_ptr = nullptr;
+  // We need this since the matmul primitive is not thead safe.
+  // To enable large parallelism, we cache the primitive per-thread.
+  std::thread::id tid;
+
+  bool operator==(const GEMMParamsKey& rhs) const {
+    return m == rhs.m && n == rhs.n && k == rhs.k && batch == rhs.batch &&
+           transpose_a == rhs.transpose_a && transpose_b == rhs.transpose_b &&
+           const_weight_ptr == rhs.const_weight_ptr &&
+           const_bias_ptr == rhs.const_bias_ptr && tid == rhs.tid;
+  }
+
+  using Hasher = GEMMParamsKeyHasher;
+};
+
+struct GEMMParamsKeyHasher {
+  std::size_t operator()(const GEMMParamsKey& key) const {
+    std::size_t seed = std::hash<int>()(key.m);
+    hash_combine(seed, key.n);
+    hash_combine(seed, key.k);
+    hash_combine(seed, key.batch);
+    hash_combine(seed, key.transpose_a);
+    hash_combine(seed, key.transpose_b);
+    hash_combine(seed, key.const_weight_ptr);
+    hash_combine(seed, key.const_bias_ptr);
+    hash_combine(seed, key.tid);
+    return seed;
+  }
+};
+
+template <typename Tinput, int NDims, typename Tfilter = Tinput,
+          typename Toutput = Tinput>
+inline GEMMParamsKey makeGEMMParamsKey(const MemRefType<Tinput, NDims>& input,
+                                       const MemRefType<Tfilter, NDims>& weight,
+                                       const MemRefType<Toutput, NDims>& result,
+                                       bool tp_a, bool tp_b,
+                                       bool weight_is_const,
+                                       const std::thread::id& tid) {
+  GEMMParamsKey key;
+  key.tid = tid;
+  key.const_weight_ptr = weight_is_const ? weight.data : nullptr;
+  for (int i = 0; i < NDims - 2; ++i) {
+    key.batch *= input.sizes[i];
+  }
+  key.m = tp_a ? input.sizes[NDims - 1] : input.sizes[NDims - 2];
+  key.n = tp_b ? weight.sizes[NDims - 2] : weight.sizes[NDims - 1];
+  key.k = tp_a ? input.sizes[NDims - 2] : input.sizes[NDims - 1];
+  key.transpose_a = tp_a;
+  key.transpose_b = tp_b;
+
+  return key;
+}
+
+template <typename Tinput, typename Tbias, int NDims, int BiasDims,
+          typename Tfilter = Tinput, typename Toutput = Tinput>
+inline GEMMParamsKey makeGEMMWithBiasParamsKey(
+    const MemRefType<Tinput, NDims>& input,
+    const MemRefType<Tfilter, NDims>& weight,
+    const MemRefType<Tbias, BiasDims>& bias,
+    const MemRefType<Toutput, NDims>& result, bool tp_a, bool tp_b,
+    bool weight_is_const, bool bias_is_const, const std::thread::id& tid) {
+  auto key = makeGEMMParamsKey(input, weight, result, tp_a, tp_b,
+                               weight_is_const, tid);
+  key.const_bias_ptr = bias_is_const ? bias.data : nullptr;
+  return key;
+}
+
+template <typename Tinput, int NDims, typename Tfilter = Tinput,
+          typename Toutput = Tinput>
+inline GEMMParamsKey makeDynamicShapeGEMMParamsKey(
+    const MemRefType<Tinput, NDims>& input,
+    const MemRefType<Tfilter, NDims>& weight,
+    const MemRefType<Toutput, NDims>& result, bool tp_a, bool tp_b,
+    bool weight_is_const, const std::thread::id& tid) {
+  GEMMParamsKey key;
+  key.tid = tid;
+  key.const_weight_ptr = weight_is_const ? weight.data : nullptr;
+  for (int i = 0; i < NDims - 2; ++i) {
+    key.batch *= weight.sizes[i];
+  }
+  key.n = tp_b ? weight.sizes[NDims - 2] : weight.sizes[NDims - 1];
+  key.k = tp_a ? input.sizes[NDims - 2] : input.sizes[NDims - 1];
+  key.transpose_a = tp_a;
+  key.transpose_b = tp_b;
+
+  return key;
+}
+
+template <typename Tinput, typename Tbias, int NDims, int BiasDims,
+          typename Tfilter = Tinput, typename Toutput = Tinput>
+inline GEMMParamsKey makeDynamicShapeGEMMWithBiasParamsKey(
+    const MemRefType<Tinput, NDims>& input,
+    const MemRefType<Tfilter, NDims>& weight,
+    const MemRefType<Tbias, BiasDims>& bias,
+    const MemRefType<Toutput, NDims>& result, bool tp_a, bool tp_b,
+    bool weight_is_const, bool bias_is_const, const std::thread::id& tid) {
+  auto key = makeDynamicShapeGEMMParamsKey(input, weight, result, tp_a, tp_b,
+                                           weight_is_const, tid);
+  key.const_bias_ptr = bias_is_const ? bias.data : nullptr;
+  return key;
+}
+
 struct ConvParams {
   format_tag input_format;
   format_tag filter_format;
@@ -102,16 +262,20 @@ struct ConvParams {
   bool is_depthwise = false;
 };
 
+struct ConvParamsKeyHasher;
+
 struct ConvParamsKey {
   std::vector<int64_t> src_dims;
   std::vector<int64_t> weight_dims;
   std::vector<int64_t> dst_dims;
   // padding & stride & dilation & groups & weight_is_const ...
   std::vector<int32_t> metadata;
-  opaque_t weight_ptr = nullptr;
+  const_buffer_t weight_ptr = nullptr;
   // We need this in case the cased kernel is not thead safe.
   // To enable large parallelism, we cache the primitive per-thread.
   std::thread::id tid;
+
+  using Hasher = ConvParamsKeyHasher;
 };
 
 inline bool operator==(const ConvParamsKey& lhs, const ConvParamsKey& rhs) {
@@ -146,11 +310,11 @@ struct ConvParamsKeyHasher {
 
 template <typename Tinput, int NDims, typename Tfilter = Tinput,
           typename Toutput = Tinput>
-inline ConvParamsKey makeConvParamsKey(MemRefType<Tinput, NDims> input,
-                                       MemRefType<Tfilter, NDims> kernel,
-                                       MemRefType<int32_t, 1> padding,
-                                       MemRefType<Toutput, NDims> output,
-                                       MemRefType<int32_t, 1> metadata,
+inline ConvParamsKey makeConvParamsKey(const MemRefType<Tinput, NDims>& input,
+                                       const MemRefType<Tfilter, NDims>& kernel,
+                                       const MemRefType<int32_t, 1>& padding,
+                                       const MemRefType<Toutput, NDims>& output,
+                                       const MemRefType<int32_t, 1>& metadata,
                                        const std::thread::id& tid) {
   ConvParamsKey key;
   key.src_dims.reserve(NDims);
@@ -167,6 +331,28 @@ inline ConvParamsKey makeConvParamsKey(MemRefType<Tinput, NDims> input,
   }
   for (int i = 0; i < padding.sizes[0]; ++i) {
     key.metadata.push_back(padding.data[i]);
+  }
+  key.weight_ptr = kernel.data;
+  key.tid = tid;
+  return key;
+}
+
+template <typename Tinput, int NDims, typename Tfilter = Tinput,
+          typename Toutput = Tinput>
+inline ConvParamsKey makeDynamicShapeConvParamsKey(
+    const MemRefType<Tinput, NDims>& input,
+    const MemRefType<Tfilter, NDims>& kernel,
+    const MemRefType<int32_t, 1>& padding,
+    const MemRefType<Toutput, NDims>& output,
+    const MemRefType<int32_t, 1>& metadata, const std::thread::id& tid) {
+  ConvParamsKey key;
+  key.weight_dims.reserve(NDims);
+  key.metadata.reserve(metadata.sizes[0]);
+  for (int i = 0; i < NDims; ++i) {
+    key.weight_dims.push_back(kernel.sizes[i]);
+  }
+  for (int i = 0; i < metadata.sizes[0]; ++i) {
+    key.metadata.push_back(metadata.data[i]);
   }
   key.weight_ptr = kernel.data;
   key.tid = tid;
@@ -460,69 +646,156 @@ void dumpConvLikeKernelProflingInfo(const ConvParams& params, size_t nanosec,
               << "\tBytes = " << bytes << "\n"
               << "\tBandwidth = " << double(bytes) / double(nanosec) << " GB\n"
               << "\tGFLOPS = " << double(gflops) / double(nanosec) << "\n";
+  TAO_VLOG(0) << "weight_is_const = " << params.weight_is_const << "\n";
+  TAO_VLOG(0) << "is_depthwise = " << params.is_depthwise << "\n";
 }
 
 #if defined(TAO_AARCH64)
+
+// Sets thread pool configurations in the first step.
+bool applyACLThreadPoolConfigIfNotSet();
+
 template <typename OpTy>
-struct AclConvLikeInfo {
+struct AclOpInfo {
   arm_compute::Tensor src;
   arm_compute::Tensor weights;
+  arm_compute::Tensor dst_s32;
   arm_compute::Tensor dst;
+  arm_compute::Tensor bias;
+  arm_compute::NEGEMMLowpOutputStage gemmlowp_output_stage;
   OpTy op;
 };
 
-template <typename OpTy>
-class AclConvLikeThreadSafeInfo {
+template <typename TKey, typename TValue>
+using AclOpMap = std::unordered_map<TKey, TValue, typename TKey::Hasher>;
+
+template <typename TKey, typename OpTy>
+class AclOpThreadSafeInfo {
  public:
-  inline std::shared_ptr<AclConvLikeInfo<OpTy>> getOrCreate(
-      std::function<std::shared_ptr<AclConvLikeInfo<OpTy>>(
-          const arm_compute::ITensorPack*)>
-          creator) {
-    auto tid = std::this_thread::get_id();
-    {
-      std::lock_guard<std::mutex> l(mu);
-      if (!mainInfo_) {
-        auto it = infoMap_.insert(std::make_pair(tid, creator(nullptr))).first;
-        return mainInfo_ = it->second;
-      }
-      auto it = infoMap_.find(tid);
-      if (it != infoMap_.end()) return it->second;
+  inline std::shared_ptr<AclOpInfo<OpTy>> getOrCreate(
+      const TKey& key, std::function<std::shared_ptr<AclOpInfo<OpTy>>(
+                           const arm_compute::ITensorPack*)>
+                           creator) {
+    int tid = ThreadLocalIndex::Get();
+    if (tid < kMaxAllowedThread) {
+      auto it = threadLocalStateFastPath_[tid].infoMap.find(key);
+      if (it != threadLocalStateFastPath_[tid].infoMap.end()) return it->second;
     }
 
-    // make a new thread local copy
-    auto info = creator(&mainInfo_->op.get_packed_weight());
+    std::shared_ptr<AclOpInfo<OpTy>> mainInfo;
+    {
+      std::lock_guard<std::mutex> l(mu);
+      if (tid >= kMaxAllowedThread) {
+        auto& state = threadLocalStateSlowPath_[tid];
+        auto it = state.infoMap.find(key);
+        if (it != state.infoMap.end()) return it->second;
+      }
+      auto mainInfoIt = mainInfoMap_.find(key);
+      if (mainInfoIt != mainInfoMap_.end()) {
+        mainInfo = mainInfoIt->second;
+      }
+    }
+
+    if (!mainInfo) {
+      mainInfo = creator(nullptr);
+      std::string md5 = mainInfo->op.get_md5_for_packed_weight();
+      std::lock_guard<std::mutex> l(mu);
+      auto r = md5MainInfoMap_.emplace(md5, mainInfo);
+      if (!r.second) {
+        // re-use packed weight from other shape configuration.
+        mainInfo = r.first->second;
+        mainInfoMap_.emplace(key, mainInfo);
+      } else {
+        // early-return if it's the first one that has md5 as `md5`
+        mainInfoMap_.emplace(key, mainInfo);
+        auto& threadLocalState = (tid < kMaxAllowedThread)
+                                     ? threadLocalStateFastPath_[tid]
+                                     : threadLocalStateSlowPath_[tid];
+        threadLocalState.infoMap.emplace(key, mainInfo);
+        return mainInfo;
+      }
+    }
+
+    auto info = creator(&mainInfo->op.get_packed_weight());
     std::lock_guard<std::mutex> l(mu);
-    infoMap_.insert(std::make_pair(tid, info));
+    auto& threadLocalState = (tid < kMaxAllowedThread)
+                                 ? threadLocalStateFastPath_[tid]
+                                 : threadLocalStateSlowPath_[tid];
+    threadLocalState.infoMap.emplace(key, info);
     return info;
   }
 
  private:
   std::mutex mu;
-  // `mainInfo` is the one owns the pre-packed weights.
-  std::shared_ptr<AclConvLikeInfo<OpTy>> mainInfo_;
-  std::unordered_map<std::thread::id, std::shared_ptr<AclConvLikeInfo<OpTy>>>
-      infoMap_;
+  struct ThreadLocalItem {
+    AclOpMap<TKey, std::shared_ptr<AclOpInfo<OpTy>>> infoMap;
+  };
+  static constexpr const int kMaxAllowedThread = 4096;
+  std::array<ThreadLocalItem, kMaxAllowedThread> threadLocalStateFastPath_;
+  std::unordered_map<int, ThreadLocalItem> threadLocalStateSlowPath_;
+  std::unordered_map<std::string, std::shared_ptr<AclOpInfo<OpTy>>>
+      md5MainInfoMap_;
+  AclOpMap<TKey, std::shared_ptr<AclOpInfo<OpTy>>> mainInfoMap_;
 };
 
-template <typename TKey, typename TValue>
-using AclConvLikeMap = std::unordered_map<TKey, TValue, ConvParamsKeyHasher>;
-template <typename OpTy>
-using AclConvLikeCache = ideep::utils::lru_cache<
-    ConvParamsKey, std::shared_ptr<AclConvLikeInfo<OpTy>>, AclConvLikeMap>;
-template <typename OpTy>
-using AclConvLikeThreadSafeCache =
-    ideep::utils::lru_cache<ConvParamsKey,
-                            std::shared_ptr<AclConvLikeThreadSafeInfo<OpTy>>,
-                            AclConvLikeMap>;
+template <typename TKey, typename OpTy>
+class AclOpThreadSafeInfoV2 {
+ public:
+  inline std::shared_ptr<AclOpInfo<OpTy>> getOrCreate(
+      const TKey& key, std::function<std::shared_ptr<AclOpInfo<OpTy>>(
+                           const arm_compute::ITensorPack*)>
+                           creator) {
+    {
+      std::lock_guard<std::mutex> l(mu);
+      auto mainInfoIt = mainInfoMap_.find(key);
+      if (mainInfoIt != mainInfoMap_.end()) return mainInfoIt->second;
+    }
 
-template <typename OpTy>
-struct AclConvLikeState : public Context::Resource {
+    std::shared_ptr<AclOpInfo<OpTy>> mainInfo = creator(nullptr);
+    std::string md5 = mainInfo->op.get_md5_for_packed_weight();
+
+    {
+      std::lock_guard<std::mutex> l(mu);
+      // double-check in case other threads have inserted the items.
+      auto mainInfoIt = mainInfoMap_.find(key);
+      if (mainInfoIt != mainInfoMap_.end()) return mainInfoIt->second;
+
+      auto r = md5MainInfoMap_.emplace(md5, mainInfo);
+      if (!r.second) {
+        // re-use packed weight from other shape configuration.
+        mainInfo = r.first->second;
+      } else {
+        // early-return if it's the first one that has md5 as `md5`
+        mainInfoMap_.emplace(key, mainInfo);
+        return mainInfo;
+      }
+    }
+
+    auto info = creator(&mainInfo->op.get_packed_weight());
+    std::lock_guard<std::mutex> l(mu);
+    auto it = mainInfoMap_.emplace(key, info);
+    return it.first->second;
+  }
+
+ private:
   std::mutex mu;
-  AclConvLikeCache<OpTy> cache{getWeightPrePackingCacheCapacity()};
+  std::unordered_map<std::string, std::shared_ptr<AclOpInfo<OpTy>>>
+      md5MainInfoMap_;
+  AclOpMap<TKey, std::shared_ptr<AclOpInfo<OpTy>>> mainInfoMap_;
+};
 
-  inline std::shared_ptr<AclConvLikeInfo<OpTy>> getOrCreate(
-      const ConvParamsKey& key,
-      std::function<std::shared_ptr<AclConvLikeInfo<OpTy>>()> creator) {
+template <typename TKey, typename OpTy>
+using AclOpCache =
+    ideep::utils::lru_cache<TKey, std::shared_ptr<AclOpInfo<OpTy>>, AclOpMap>;
+
+template <typename TKey, typename OpTy>
+struct AclOpState : public Context::Resource {
+  std::mutex mu;
+  AclOpCache<TKey, OpTy> cache{getWeightPrePackingCacheCapacity()};
+
+  inline std::shared_ptr<AclOpInfo<OpTy>> getOrCreate(
+      const TKey& key,
+      std::function<std::shared_ptr<AclOpInfo<OpTy>>()> creator) {
     std::lock_guard<std::mutex> l(mu);
     auto it = cache.find(key);
     if (it == cache.end()) {
@@ -532,40 +805,59 @@ struct AclConvLikeState : public Context::Resource {
   }
 };
 
-template <typename OpTy>
-struct AclConvLikeThreadSafeState : public Context::Resource {
-  std::mutex mu;
-  AclConvLikeThreadSafeCache<OpTy> cache{getWeightPrePackingCacheCapacity()};
+template <typename TKey, typename OpTy,
+          typename ThreadSafeInfo = AclOpThreadSafeInfo<TKey, OpTy>>
+struct AclOpThreadSafeState : public Context::Resource {
+  // some helper type aliases
+  using ThreadSafeInfoPtr = std::shared_ptr<ThreadSafeInfo>;
+  using AclOpThreadSafeCache =
+      ideep::utils::lru_cache<TKey, ThreadSafeInfoPtr, AclOpMap>;
 
-  inline std::shared_ptr<AclConvLikeInfo<OpTy>> getOrCreate(
-      const ConvParamsKey& key,
-      std::function<std::shared_ptr<AclConvLikeInfo<OpTy>>(
-          const arm_compute::ITensorPack*)>
-          creator) {
-    using ThreadSafeInfo = AclConvLikeThreadSafeInfo<OpTy>;
-    std::shared_ptr<ThreadSafeInfo> threadSafeInfo;
-    {
-      std::lock_guard<std::mutex> l(mu);
-      auto it = cache.find(key);
-      if (it == cache.end()) {
-        it = cache
-                 .insert(std::make_pair(
-                     key, std::shared_ptr<ThreadSafeInfo>(new ThreadSafeInfo)))
-                 .first;
-      }
-      threadSafeInfo = it->second;
+  std::mutex mu;
+  AclOpThreadSafeCache cache{getWeightPrePackingCacheCapacity()};
+
+  inline ThreadSafeInfoPtr getOrCreate(const TKey& key) {
+    std::lock_guard<std::mutex> l(mu);
+    auto it = cache.find(key);
+    if (it == cache.end()) {
+      it = cache
+               .insert(
+                   std::make_pair(key, ThreadSafeInfoPtr(new ThreadSafeInfo)))
+               .first;
     }
-    return threadSafeInfo->getOrCreate(creator);
+    return it->second;
   }
 };
 
 using AclDepthwiseConvInfo =
-    AclConvLikeInfo<arm_compute::DISCNEDepthwiseConvolutionLayer>;
-using AclDepthwiseConvState =
-    AclConvLikeState<arm_compute::DISCNEDepthwiseConvolutionLayer>;
-using AclConvInfo = AclConvLikeInfo<arm_compute::DISCNEConvolutionLayer>;
+    AclOpInfo<arm_compute::DISCNEDepthwiseConvolutionLayer>;
+using AclDepthwiseConvThreadSafeInfo =
+    AclOpThreadSafeInfoV2<ConvParamsKey,
+                          arm_compute::DISCNEDepthwiseConvolutionLayer>;
+using AclDepthwiseConvState = AclOpThreadSafeState<
+    ConvParamsKey, arm_compute::DISCNEDepthwiseConvolutionLayer,
+    AclOpThreadSafeInfoV2<ConvParamsKey,
+                          arm_compute::DISCNEDepthwiseConvolutionLayer>>;
+
+using AclConvInfo = AclOpInfo<arm_compute::DISCNEConvolutionLayer>;
+using AclConvThreadSafeInfo =
+    AclOpThreadSafeInfo<ConvParamsKey, arm_compute::DISCNEConvolutionLayer>;
 using AclConvState =
-    AclConvLikeThreadSafeState<arm_compute::DISCNEConvolutionLayer>;
+    AclOpThreadSafeState<ConvParamsKey, arm_compute::DISCNEConvolutionLayer>;
+
+using AclConvThreadSafeInfoV2 =
+    AclOpThreadSafeInfoV2<ConvParamsKey, arm_compute::DISCNEConvolutionLayer>;
+using AclConvStateV2 =
+    AclOpThreadSafeState<ConvParamsKey, arm_compute::DISCNEConvolutionLayer,
+                         AclConvThreadSafeInfoV2>;
+
+using AclQGemmInfo = AclOpInfo<arm_compute::DISCNEGEMMLowpMatrixMultiplyCore>;
+using AclQGemmThreadSafeInfo =
+    AclOpThreadSafeInfo<GEMMParamsKey,
+                        arm_compute::DISCNEGEMMLowpMatrixMultiplyCore>;
+using AclQGemmState =
+    AclOpThreadSafeState<GEMMParamsKey,
+                         arm_compute::DISCNEGEMMLowpMatrixMultiplyCore>;
 
 #endif  // TAO_AARCH64
 

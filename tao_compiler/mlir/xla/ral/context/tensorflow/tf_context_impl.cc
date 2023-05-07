@@ -15,7 +15,7 @@
 // limitations under the License.
 // ============================================================================
 
-#include "tensorflow/compiler/mlir/xla/ral/context/tensorflow/tf_context_impl.h"
+#include "mlir/xla/ral/context/tensorflow/tf_context_impl.h"
 
 #include <array>
 #include <cstdlib>
@@ -23,10 +23,10 @@
 #include <string>
 #include <unordered_map>
 
-#include "tensorflow/compiler/mlir/xla/ral/context/common_context_impl.h"
-#include "tensorflow/compiler/mlir/xla/ral/context/context_util.h"
-#include "tensorflow/compiler/mlir/xla/ral/ral_driver.h"
-#include "tensorflow/compiler/mlir/xla/ral/ral_helper.h"
+#include "mlir/xla/ral/context/common_context_impl.h"
+#include "mlir/xla/ral/context/context_util.h"
+#include "mlir/xla/ral/ral_driver.h"
+#include "mlir/xla/ral/ral_helper.h"
 #include "tensorflow/core/public/version.h"
 #include "tensorflow/stream_executor/device_description.h"
 
@@ -127,14 +127,14 @@ RalTfContext::RalTfContext(const RalTfContextOptions& options) {
       auto state = new ::tao::ral::RalGlobalConstantState;
 
       // The metadata file is loaded once. The data will
-      // be erased from metadata_proto once memcpy is done;
-      if (::tao::ral::parseMetadataPb(options.metadata_file_path,
-                                      &(state->metadata_proto))) {
+      // be erased from metadata file once memcpy is done;
+      if ((state->metadata = tao::ral::MetadataFile::loadFromFile(
+               options.metadata_file_path))) {
+        return state;
+      } else {
         delete state;
         return (::tao::ral::RalGlobalConstantState*)nullptr;
       }
-
-      return state;
     });
   }
 }
@@ -398,6 +398,7 @@ void ral_tf_gpu_launch(ExecutionContext* ctx, void** blobs, size_t num_blobs,
   se::Stream* stream = nullptr;
   se::StreamExecutor* executor = nullptr;
   se::KernelBase* kernel_ptr = nullptr;
+  std::string namedeb;
   {
     std::lock_guard<std::mutex> lock(state->mu);
     stream = ral_tf_ctx->getOpContext()->op_device_context()->stream();
@@ -441,6 +442,7 @@ void ral_tf_gpu_launch(ExecutionContext* ctx, void** blobs, size_t num_blobs,
 
     auto key = std::make_pair(blob, std::string(kernel_name));
     auto it = state->kernels.find(key);
+    namedeb = key.second;
     if (it == state->kernels.end()) {
       se::MultiKernelLoaderSpec spec(num_args);
       spec.AddCudaCubinInMemory((char*)blob, (char*)kernel_name);
@@ -457,6 +459,17 @@ void ral_tf_gpu_launch(ExecutionContext* ctx, void** blobs, size_t num_blobs,
   }
 
   RalTfKernelArgsArrayBase kernel_args(params, num_args);
+  if (VLOG_IS_ON(2)) {
+    VLOG(2) << "kernel is " << namedeb;
+    se::KernelArgIterator iter = kernel_args.arg_iterator();
+    while (iter.has_next()) {
+      se::KernelArg arg = iter.next();
+      VLOG(2) << "*(arg.address):"
+              << reinterpret_cast<uint64_t>(
+                     *static_cast<const uint64_t*>(arg.address));
+    }
+  }
+
   auto status = ral_to_bool(executor->Launch(
       stream, se::ThreadDim(blockX, blockY, blockZ),
       se::BlockDim(gridX, gridY, gridZ), *kernel_ptr, kernel_args));

@@ -12,21 +12,21 @@ limitations under the License.
 
 // This file defines topk custom call.
 
-#include "tensorflow/compiler/mlir/disc/IR/rng_uniform_custom_call_op.h"
+#include "mlir/disc/IR/rng_uniform_custom_call_op.h"
 
 #include <atomic>
 
-#include "mlir-hlo/Dialect/mhlo/IR/hlo_ops.h"
-#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mhlo/IR/hlo_ops.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/PatternMatch.h"
-#include "tensorflow/compiler/mlir/disc/IR/custom_call_base.h"
-#include "tensorflow/compiler/mlir/disc/IR/disc_ral_ops.h"
-#include "tensorflow/compiler/mlir/disc/IR/hlo_disc_ops.h"
-#include "tensorflow/compiler/mlir/disc/IR/lhlo_disc_ops.h"
-#include "tensorflow/compiler/mlir/disc/transforms/codegen_utils.h"
-#include "tensorflow/compiler/mlir/disc/transforms/placement_utils.h"
+#include "mlir/disc/IR/custom_call_base.h"
+#include "mlir/disc/IR/disc_ral_ops.h"
+#include "mlir/disc/IR/hlo_disc_ops.h"
+#include "mlir/disc/IR/lhlo_disc_ops.h"
+#include "mlir/disc/transforms/codegen_utils.h"
+#include "mlir/disc/transforms/placement_utils.h"
 
 using ::mlir::mhlo_disc::RngUniformBackendConfig;
 
@@ -99,7 +99,7 @@ LogicalResult lowerToLibraryCallImpl<RngUniformBackendConfig>(
   // seed & seed2
   llvm::Expected<RngUniformBackendConfig> backend_config =
       llvm::json::parse<RngUniformBackendConfig>(
-          op.backend_config().cast<StringAttr>());
+          op.getBackendConfig().cast<StringAttr>());
   if (auto e = backend_config.takeError()) {
     return op.emitOpError()
            << "Problem with parsing rng_uniform backend_config: "

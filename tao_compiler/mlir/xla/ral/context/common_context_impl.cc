@@ -9,7 +9,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "tensorflow/compiler/mlir/xla/ral/context/common_context_impl.h"
+#include "mlir/xla/ral/context/common_context_impl.h"
 
 #include <fcntl.h>
 #include <omp.h>
@@ -20,12 +20,10 @@
 #include <numeric>
 
 #include "absl/strings/str_split.h"
-#include "google/protobuf/io/zero_copy_stream_impl.h"
-#include "google/protobuf/text_format.h"
-#include "tensorflow/compiler/mlir/xla/ral/context/context_util.h"
-#include "tensorflow/compiler/mlir/xla/ral/device/cpu/cpu_driver.h"
-#include "tensorflow/compiler/mlir/xla/ral/ral_base.h"
-#include "tensorflow/compiler/mlir/xla/ral/ral_helper.h"
+#include "mlir/xla/ral/context/context_util.h"
+#include "mlir/xla/ral/device/cpu/cpu_driver.h"
+#include "mlir/xla/ral/ral_base.h"
+#include "mlir/xla/ral/ral_helper.h"
 
 // If we're on gcc 4.8 or older, there's a known bug that prevents the use of
 // intrinsics when the architecture is not defined in the flags. See
@@ -175,7 +173,11 @@ ProcessLevelConstStore* ConstStoreRegistrar::getConstStore(
   if (it == pbFile2Instance.end()) {
     ProcessLevelConstStore* const_store = new ProcessLevelConstStore;
     const_store->pb_file_path = pb_file_path;
-    parseMetadataPb(pb_file_path, &(const_store->state.metadata_proto));
+    const_store->state.metadata = MetadataFile::loadFromFile(pb_file_path);
+    if (!const_store->state.metadata) {
+      TAO_LOG(ERROR) << "failed to load metadata file from: " << pb_file_path;
+      return nullptr;
+    }
     it =
         pbFile2Instance.insert(std::make_pair(pb_file_path, const_store)).first;
   }
@@ -211,32 +213,6 @@ const std::map<std::pair<int, int>, size_t> c_CC_INDEX_MAP{
     {{8, 0}, 3},  // sm_80
     {{8, 6}, 4}   // sm_86
 };
-
-int parseMetadataPb(const std::string& pb_file_path,
-                    mlir::MetadataProto* proto) {
-  int fileDescriptor = open(pb_file_path.c_str(), O_RDONLY);
-  if (fileDescriptor < 0) {
-    TAO_VLOG(0) << "Error file not found: " << pb_file_path;
-    return 1;
-  }
-#ifdef RAL_NEED_PROTO3
-  google::protobuf3::io::FileInputStream fileInput(fileDescriptor);
-  fileInput.SetCloseOnDelete(true);
-  if (!google::protobuf3::TextFormat::Parse(&fileInput, proto)) {
-    TAO_VLOG(0) << "Error: parse prototxt failed: " << pb_file_path;
-    return 1;
-  }
-
-#else
-  google::protobuf::io::FileInputStream fileInput(fileDescriptor);
-  fileInput.SetCloseOnDelete(true);
-  if (!google::protobuf::TextFormat::Parse(&fileInput, proto)) {
-    TAO_VLOG(0) << "Error: parse prototxt failed: " << pb_file_path;
-    return 1;
-  }
-#endif
-  return 0;
-}
 
 buffer_shape_t GetShapeFromConstUniqueName(ExecutionContext* ctx,
                                            const std::string& unique_name,
@@ -330,14 +306,13 @@ inline buffer_t ral_base_cuda_const_host_internal(
       buffer_shape_t dim_sizes =
           GetShapeFromConstUniqueName(ctx, unique_name, &width_in_bytes);
       // alloc, get value from metadata file
-      const auto& constants = state->metadata_proto.host_global_constants();
-      if (constants.find(key) == constants.end()) {
+      const std::string* hex_str_ptr;
+      if (!state->metadata->getHostConstant(key, hex_str_ptr)) {
         std::string msg =
             "const unique_name " + key + "not found in metadata file";
         ctx->signalError(Context::FAILURE, msg);
       }
-      std::string hex_str = constants.at(key);
-      auto data = fromHex(hex_str);
+      auto data = fromHex(*hex_str_ptr);
       auto bytes = data.size();
       int64_t num_elements = std::accumulate(dim_sizes.begin(), dim_sizes.end(),
                                              1, std::multiplies<int64_t>());
@@ -357,7 +332,7 @@ inline buffer_t ral_base_cuda_const_host_internal(
       std::memcpy(data_ptr, data.data(), bytes);
 
       TAO_VLOG(2) << "data.size: " << bytes;
-      state->metadata_proto.mutable_host_global_constants()->erase(key);
+      state->metadata->releaseHostConstant(key);
 
       it = state->host_constants
                .insert(std::make_pair(key, std::make_pair(data_ptr, dim_sizes)))
@@ -417,7 +392,11 @@ MemRefType<T, 0> ral_base_cuda_const_host_0d(ExecutionContext* ctx,
 RAL_REGISTER_CONST_HOST_FUNC_0D(double);
 RAL_REGISTER_CONST_HOST_FUNC_0D(float);
 RAL_REGISTER_CONST_HOST_FUNC_0D(int8_t);
+RAL_REGISTER_CONST_HOST_FUNC_0D(uint8_t);
+RAL_REGISTER_CONST_HOST_FUNC_0D(int16_t);
+RAL_REGISTER_CONST_HOST_FUNC_0D(uint16_t);
 RAL_REGISTER_CONST_HOST_FUNC_0D(int32_t);
+RAL_REGISTER_CONST_HOST_FUNC_0D(uint32_t);
 RAL_REGISTER_CONST_HOST_FUNC_0D(int64_t);
 RAL_REGISTER_CONST_HOST_FUNC_0D(bool);
 RAL_REGISTER_CONST_HOST_FUNC(double, 1);
@@ -444,6 +423,30 @@ RAL_REGISTER_CONST_HOST_FUNC(int8_t, 5);
 RAL_REGISTER_CONST_HOST_FUNC(int8_t, 6);
 RAL_REGISTER_CONST_HOST_FUNC(int8_t, 7);
 RAL_REGISTER_CONST_HOST_FUNC(int8_t, 8);
+RAL_REGISTER_CONST_HOST_FUNC(uint8_t, 1);
+RAL_REGISTER_CONST_HOST_FUNC(uint8_t, 2);
+RAL_REGISTER_CONST_HOST_FUNC(uint8_t, 3);
+RAL_REGISTER_CONST_HOST_FUNC(uint8_t, 4);
+RAL_REGISTER_CONST_HOST_FUNC(uint8_t, 5);
+RAL_REGISTER_CONST_HOST_FUNC(uint8_t, 6);
+RAL_REGISTER_CONST_HOST_FUNC(uint8_t, 7);
+RAL_REGISTER_CONST_HOST_FUNC(uint8_t, 8);
+RAL_REGISTER_CONST_HOST_FUNC(int16_t, 1);
+RAL_REGISTER_CONST_HOST_FUNC(int16_t, 2);
+RAL_REGISTER_CONST_HOST_FUNC(int16_t, 3);
+RAL_REGISTER_CONST_HOST_FUNC(int16_t, 4);
+RAL_REGISTER_CONST_HOST_FUNC(int16_t, 5);
+RAL_REGISTER_CONST_HOST_FUNC(int16_t, 6);
+RAL_REGISTER_CONST_HOST_FUNC(int16_t, 7);
+RAL_REGISTER_CONST_HOST_FUNC(int16_t, 8);
+RAL_REGISTER_CONST_HOST_FUNC(uint16_t, 1);
+RAL_REGISTER_CONST_HOST_FUNC(uint16_t, 2);
+RAL_REGISTER_CONST_HOST_FUNC(uint16_t, 3);
+RAL_REGISTER_CONST_HOST_FUNC(uint16_t, 4);
+RAL_REGISTER_CONST_HOST_FUNC(uint16_t, 5);
+RAL_REGISTER_CONST_HOST_FUNC(uint16_t, 6);
+RAL_REGISTER_CONST_HOST_FUNC(uint16_t, 7);
+RAL_REGISTER_CONST_HOST_FUNC(uint16_t, 8);
 RAL_REGISTER_CONST_HOST_FUNC(int32_t, 1);
 RAL_REGISTER_CONST_HOST_FUNC(int32_t, 2);
 RAL_REGISTER_CONST_HOST_FUNC(int32_t, 3);
@@ -452,6 +455,14 @@ RAL_REGISTER_CONST_HOST_FUNC(int32_t, 5);
 RAL_REGISTER_CONST_HOST_FUNC(int32_t, 6);
 RAL_REGISTER_CONST_HOST_FUNC(int32_t, 7);
 RAL_REGISTER_CONST_HOST_FUNC(int32_t, 8);
+RAL_REGISTER_CONST_HOST_FUNC(uint32_t, 1);
+RAL_REGISTER_CONST_HOST_FUNC(uint32_t, 2);
+RAL_REGISTER_CONST_HOST_FUNC(uint32_t, 3);
+RAL_REGISTER_CONST_HOST_FUNC(uint32_t, 4);
+RAL_REGISTER_CONST_HOST_FUNC(uint32_t, 5);
+RAL_REGISTER_CONST_HOST_FUNC(uint32_t, 6);
+RAL_REGISTER_CONST_HOST_FUNC(uint32_t, 7);
+RAL_REGISTER_CONST_HOST_FUNC(uint32_t, 8);
 RAL_REGISTER_CONST_HOST_FUNC(int64_t, 1);
 RAL_REGISTER_CONST_HOST_FUNC(int64_t, 2);
 RAL_REGISTER_CONST_HOST_FUNC(int64_t, 3);
@@ -975,7 +986,7 @@ TAO_RAL_API(cpu::kRalCpuLaunch, "cpu", ompLaunchKernel);
 }  // namespace tao
 
 #ifdef TAO_RAL_USE_STREAM_EXECUTOR
-#include "tensorflow/compiler/mlir/xla/ral/context/stream_executor_based_impl.h"
+#include "mlir/xla/ral/context/stream_executor_based_impl.h"
 namespace tao {
 namespace ral {
 RAL_REGISTER_CONST_HOST_FUNC_0D(Eigen::half);

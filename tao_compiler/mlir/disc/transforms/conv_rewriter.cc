@@ -16,7 +16,7 @@ limitations under the License.
 // This file canonicalize conv ops in hlo dialect to match the
 // format of CUDNN library call.
 #include "llvm/Support/Debug.h"
-#include "mlir-hlo/Dialect/mhlo/IR/hlo_ops.h"
+#include "mhlo/IR/hlo_ops.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Attributes.h"                          // TF:llvm-project
 #include "mlir/IR/Location.h"                            // TF:llvm-project
@@ -24,9 +24,10 @@ limitations under the License.
 #include "mlir/IR/Operation.h"                           // TF:llvm-project
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"  // from @llvm-project
 #include "mlir/Transforms/Passes.h"                      // TF:llvm-project
-#include "tensorflow/compiler/mlir/disc/disc_util.h"
-#include "tensorflow/compiler/mlir/disc/transforms/placement_utils.h"
-#include "transforms/PassDetail.h"
+#include "mlir/disc/disc_util.h"
+#include "mlir/disc/transforms/PassDetail.h"
+#include "mlir/disc/transforms/placement_utils.h"
+#include "tensorflow/core/util/env_var.h"
 
 #define DEBUG_TYPE "conv-rewriter"
 
@@ -41,6 +42,7 @@ namespace {
 //   * in_channel, out_channel, spatial dimensions
 // - output layout: each field for one dimension. The order is:
 //   * batch, channel, spatial dimensions
+template <typename T>
 struct ConvParams {
   int num_spatial_dims;
   Value input;
@@ -52,19 +54,16 @@ struct ConvParams {
   SmallVector<int64_t> expectedInputLayout;
   SmallVector<int64_t> expectedFilterLayout;
   SmallVector<int64_t> expectedOutputLayout;
-  mhlo::DynamicConvOp conv;
+  T conv;
 };
 
-LogicalResult extractConvParams(mhlo::DynamicConvOp op, ConvParams& params) {
-  params.conv = op;
-  params.input = op.lhs();
-  params.filter = op.rhs();
-  params.output = op.getResult();
-
-  auto inputTy = params.input.getType().dyn_cast<RankedTensorType>();
-  auto filterTy = params.filter.getType().dyn_cast<RankedTensorType>();
-  auto paddingTy = op.d_padding().getType().dyn_cast<RankedTensorType>();
-  auto outputTy = params.output.getType().dyn_cast<RankedTensorType>();
+template <typename T>
+LogicalResult fillConvParams(T op, ConvParams<T>& params) {
+  auto inputTy = params.input.getType().template dyn_cast<RankedTensorType>();
+  auto filterTy = params.filter.getType().template dyn_cast<RankedTensorType>();
+  auto paddingTy =
+      op.getDPadding().getType().template dyn_cast<RankedTensorType>();
+  auto outputTy = params.output.getType().template dyn_cast<RankedTensorType>();
 
   if (!inputTy || !filterTy || !paddingTy || !outputTy) {
     return op.emitOpError() << "operands must be ranked type";
@@ -77,7 +76,7 @@ LogicalResult extractConvParams(mhlo::DynamicConvOp op, ConvParams& params) {
     return op.emitOpError() << "conv op's input rank is less than 3";
   }
 
-  auto dimension_numbers = op.dimension_numbers();
+  auto dimension_numbers = op.getDimensionNumbers();
   params.inputLayout.push_back(dimension_numbers.getInputBatchDimension());
   params.inputLayout.push_back(dimension_numbers.getInputFeatureDimension());
   auto input_spatial_dimensions = dimension_numbers.getInputSpatialDimensions();
@@ -102,8 +101,28 @@ LogicalResult extractConvParams(mhlo::DynamicConvOp op, ConvParams& params) {
   for (int i = 0; i < params.num_spatial_dims; ++i) {
     params.outputLayout.push_back(output_spatial_dimensions[i]);
   }
-
   return success();
+}
+
+LogicalResult extractConvParams(mhlo::DynamicConvOp op,
+                                ConvParams<mhlo::DynamicConvOp>& params) {
+  params.conv = op;
+  params.input = op.getLhs();
+  params.filter = op.getRhs();
+  params.output = op.getResult();
+
+  return fillConvParams<mhlo::DynamicConvOp>(op, params);
+}
+
+LogicalResult extractConvParams(
+    mlir::mhlo_disc::QuantizedDynamicConvOp op,
+    ConvParams<mlir::mhlo_disc::QuantizedDynamicConvOp>& params) {
+  params.conv = op;
+  params.input = op.getInput();
+  params.filter = op.getWeight();
+  params.output = op.getResult();
+
+  return fillConvParams<mlir::mhlo_disc::QuantizedDynamicConvOp>(op, params);
 }
 
 void fillNCHW(SmallVector<int64_t>& layout, int num_spatial_dims) {
@@ -146,61 +165,6 @@ void fillOHWI(SmallVector<int64_t>& layout, int num_spatial_dims) {
   }
 }
 
-// Returns true if the conv is depthwise.
-bool isDepthwiseConv(ConvParams& params) {
-  auto filterTy = params.filter.getType().cast<RankedTensorType>();
-  return filterTy.getShape()[params.filterLayout[0]] == 1;
-}
-
-LogicalResult inferExpectedLayout(ConvParams& params) {
-  bool onGpu = placement_utils::isGpuMhlo(params.conv);
-  auto inputTy = params.input.getType().dyn_cast<RankedTensorType>();
-  auto filterTy = params.filter.getType().dyn_cast<RankedTensorType>();
-  auto outputTy = params.output.getType().dyn_cast<RankedTensorType>();
-  int rank = inputTy.getRank();
-  int num_spatial_dims = params.num_spatial_dims;
-
-  auto& inputLayout = params.expectedInputLayout;
-  auto& filterLayout = params.expectedFilterLayout;
-  auto& outputLayout = params.expectedOutputLayout;
-  inputLayout.resize(rank);
-  filterLayout.resize(rank);
-  outputLayout.resize(rank);
-
-  if (onGpu) {
-    if (inputTy.getElementType().isF16() && filterTy.getElementType().isF16()) {
-      // TensorCore prefers NHWC layouts
-      fillNHWC(inputLayout, num_spatial_dims);
-      fillNHWC(outputLayout, num_spatial_dims);
-      fillOHWI(filterLayout, num_spatial_dims);
-    } else {
-      // Default is NCHW & OIHW
-      fillNCHW(inputLayout, num_spatial_dims);
-      fillNCHW(outputLayout, num_spatial_dims);
-      fillOIHW(filterLayout, num_spatial_dims);
-    }
-  } else {
-#if defined(TAO_AARCH64)
-    if (isDepthwiseConv(params)) {
-      fillNHWC(inputLayout, num_spatial_dims);
-      fillNHWC(outputLayout, num_spatial_dims);
-      fillHWIO(filterLayout, num_spatial_dims);
-    } else {
-      fillNHWC(inputLayout, num_spatial_dims);
-      fillNHWC(outputLayout, num_spatial_dims);
-      fillOHWI(filterLayout, num_spatial_dims);
-    }
-#else
-    // CPU conv, default layout:
-    fillNHWC(inputLayout, num_spatial_dims);
-    fillNHWC(outputLayout, num_spatial_dims);
-    fillHWIO(filterLayout, num_spatial_dims);
-#endif
-  }
-
-  return success();
-}
-
 SmallVector<int64_t> inferTransposeAttr(
     const SmallVector<int64_t>& layout,
     const SmallVector<int64_t>& expectedLayout) {
@@ -224,8 +188,8 @@ struct ConvToDynamicConvConvert : public OpRewritePattern<mhlo::ConvolutionOp> {
   LogicalResult matchAndRewrite(mhlo::ConvolutionOp op,
                                 PatternRewriter& rewriter) const override {
     Location loc = op.getLoc();
-    Value input = op.lhs();
-    Value filter = op.rhs();
+    Value input = op.getLhs();
+    Value filter = op.getRhs();
 
     auto input_tp = input.getType().dyn_cast<RankedTensorType>();
     auto filter_tp = filter.getType().dyn_cast<RankedTensorType>();
@@ -241,7 +205,7 @@ struct ConvToDynamicConvConvert : public OpRewritePattern<mhlo::ConvolutionOp> {
       return failure();
     }
 
-    auto i64Vec = ConvertDenseIntAttr(op.padding());
+    auto i64Vec = ConvertDenseIntAttr(op.getPadding());
     std::vector<int32_t> paddingValues(i64Vec.size());
     std::transform(
         i64Vec.begin(), i64Vec.end(), paddingValues.begin(),
@@ -265,10 +229,85 @@ struct ConvToDynamicConvConvert : public OpRewritePattern<mhlo::ConvolutionOp> {
 
 // The basic logic of this pass is to insert transpose op to ensure the conv op
 // having expected format.
+template <typename T>
 struct DiscConvRewriterPass
-    : public ConvRewriterPassBase<DiscConvRewriterPass> {
-  explicit DiscConvRewriterPass()
-      : ConvRewriterPassBase<DiscConvRewriterPass>::ConvRewriterPassBase() {}
+    : public ConvRewriterPassBase<DiscConvRewriterPass<T>> {
+  explicit DiscConvRewriterPass(int cc_major, int cc_minor)
+      : ConvRewriterPassBase<DiscConvRewriterPass<T>>::ConvRewriterPassBase() {
+    cc_major_ = cc_major;
+    cc_minor_ = cc_minor;
+  }
+
+  // Returns true if the conv is depthwise.
+  bool isDepthwiseConv(ConvParams<T>& params) {
+    auto filterTy = params.filter.getType().template cast<RankedTensorType>();
+    return filterTy.getShape()[params.filterLayout[0]] == 1;
+  }
+
+  LogicalResult inferExpectedLayout(ConvParams<T>& params, int cc_major) {
+    bool onGpu = placement_utils::isGpuMhlo(params.conv);
+    auto inputTy = params.input.getType().template dyn_cast<RankedTensorType>();
+    auto filterTy =
+        params.filter.getType().template dyn_cast<RankedTensorType>();
+    auto outputTy =
+        params.output.getType().template dyn_cast<RankedTensorType>();
+    int rank = inputTy.getRank();
+    int num_spatial_dims = params.num_spatial_dims;
+
+    auto& inputLayout = params.expectedInputLayout;
+    auto& filterLayout = params.expectedFilterLayout;
+    auto& outputLayout = params.expectedOutputLayout;
+    inputLayout.resize(rank);
+    filterLayout.resize(rank);
+    outputLayout.resize(rank);
+
+    if (onGpu) {
+      bool is_fp32 =
+          inputTy.getElementType().isF32() && filterTy.getElementType().isF32();
+      bool use_tf32 = true;
+      TF_CHECK_OK(tensorflow::ReadBoolFromEnvVar("NVIDIA_TF32_OVERRIDE",
+                                                 /*default_val=*/use_tf32,
+                                                 &use_tf32));
+#if !defined(TENSORFLOW_USE_ROCM)
+      if (cc_major >= 8 && (!is_fp32 || use_tf32) ||
+          inputTy.getElementType().isF16() &&
+              filterTy.getElementType().isF16()) {
+        // TensorCore prefers NHWC layouts
+        fillNHWC(inputLayout, num_spatial_dims);
+        fillNHWC(outputLayout, num_spatial_dims);
+        fillOHWI(filterLayout, num_spatial_dims);
+      } else {
+        // Default is NCHW & OIHW
+        fillNCHW(inputLayout, num_spatial_dims);
+        fillNCHW(outputLayout, num_spatial_dims);
+        fillOIHW(filterLayout, num_spatial_dims);
+      }
+#else
+      fillNCHW(inputLayout, num_spatial_dims);
+      fillNCHW(outputLayout, num_spatial_dims);
+      fillOIHW(filterLayout, num_spatial_dims);
+#endif
+    } else {
+#if defined(TAO_AARCH64)
+      if (isDepthwiseConv(params)) {
+        fillNHWC(inputLayout, num_spatial_dims);
+        fillNHWC(outputLayout, num_spatial_dims);
+        fillHWIO(filterLayout, num_spatial_dims);
+      } else {
+        fillNHWC(inputLayout, num_spatial_dims);
+        fillNHWC(outputLayout, num_spatial_dims);
+        fillOHWI(filterLayout, num_spatial_dims);
+      }
+#else
+      // CPU conv, default layout:
+      fillNHWC(inputLayout, num_spatial_dims);
+      fillNHWC(outputLayout, num_spatial_dims);
+      fillHWIO(filterLayout, num_spatial_dims);
+#endif
+    }
+
+    return success();
+  }
 
   RankedTensorType GetTransposeOutputType(
       Value value, const SmallVectorImpl<int64_t>& transpose_permutation,
@@ -284,8 +323,8 @@ struct DiscConvRewriterPass
   }
 
   Operation* InsertTranspose(
-      mhlo::DynamicConvOp op, Value value,
-      const SmallVectorImpl<int64_t>& transpose_permutation, OpBuilder& b) {
+      T op, Value value, const SmallVectorImpl<int64_t>& transpose_permutation,
+      OpBuilder& b) {
     auto transpose_permutation_attr =
         GetI64ElementsAttr(transpose_permutation, &b);
 
@@ -307,7 +346,7 @@ struct DiscConvRewriterPass
     return transpose_op;
   }
 
-  void MaybeRewriteInputFormat(ConvParams& params) {
+  void MaybeRewriteInputFormat(ConvParams<T>& params) {
     if (params.inputLayout == params.expectedInputLayout) return;
 
     auto transposeAttr =
@@ -319,7 +358,7 @@ struct DiscConvRewriterPass
     params.conv.getOperation()->setOperand(0, transpose_op->getResult(0));
   }
 
-  void MaybeRewriteFilterFormat(ConvParams& params) {
+  void MaybeRewriteFilterFormat(ConvParams<T>& params) {
     if (params.filterLayout == params.expectedFilterLayout) return;
 
     auto transposeAttr =
@@ -331,7 +370,7 @@ struct DiscConvRewriterPass
     params.conv.getOperation()->setOperand(1, transpose_op->getResult(0));
   }
 
-  void MaybeRewriteOutputFormat(ConvParams& params) {
+  void MaybeRewriteOutputFormat(ConvParams<T>& params) {
     if (params.outputLayout == params.expectedOutputLayout) return;
 
     auto in2OutAttr =
@@ -352,7 +391,7 @@ struct DiscConvRewriterPass
     transpose_op->setOperand(0, params.output);
   }
 
-  void UpdateAttributes(ConvParams& params) {
+  void UpdateAttributes(ConvParams<T>& params) {
     OpBuilder b(params.conv);
     SmallVector<int64_t, 2> inputSpatialDims;
     SmallVector<int64_t, 2> filterSpatialDims;
@@ -378,13 +417,13 @@ struct DiscConvRewriterPass
             /*outputSpatialDimensions*/ outputSpatialDims));
   }
 
-  LogicalResult RewriteOp(mhlo::DynamicConvOp op) {
-    ConvParams params;
+  LogicalResult RewriteOp(T op) {
+    ConvParams<T> params;
     if (failed(extractConvParams(op, params))) {
       return failure();
     }
 
-    if (failed(inferExpectedLayout(params))) {
+    if (failed(inferExpectedLayout(params, cc_major_))) {
       return failure();
     }
 
@@ -397,7 +436,7 @@ struct DiscConvRewriterPass
   }
 
   LogicalResult convToDynamicConv() {
-    func::FuncOp func = getOperation();
+    func::FuncOp func = this->getOperation();
     MLIRContext* ctx = func.getContext();
     RewritePatternSet patterns(ctx);
     patterns.insert<ConvToDynamicConvConvert>(ctx);
@@ -409,30 +448,45 @@ struct DiscConvRewriterPass
   }
 
   void runOnOperation() override {
-    if (failed(convToDynamicConv())) {
-      signalPassFailure();
-      return;
+    if (std::is_same<T, mhlo::DynamicConvOp>::value) {
+      if (failed(convToDynamicConv())) {
+        this->signalPassFailure();
+        return;
+      }
     }
 
-    SmallVector<mhlo::DynamicConvOp, 4> ops;
-    getOperation().walk([&](mhlo::DynamicConvOp op) { ops.push_back(op); });
+    SmallVector<T, 4> ops;
+    this->getOperation().walk([&](T op) { ops.push_back(op); });
 
     // TODO(disc): We rewrite each conv op seperately, thus may lead to
     // unnecessary transpose ops. We may implement another layout optimize pass
     // in case necessary.
     for (auto& op : ops) {
       if (failed(RewriteOp(op))) {
-        signalPassFailure();
+        this->signalPassFailure();
         return;
       }
     }
   }
+
+ private:
+  int cc_major_;
+  int cc_minor_;
 };
 
 }  // namespace
 
-std::unique_ptr<OperationPass<func::FuncOp>> createDiscConvRewriter() {
-  return std::make_unique<DiscConvRewriterPass>();
+std::unique_ptr<OperationPass<func::FuncOp>> createDiscConvRewriter(
+    int cc_major, int cc_minor) {
+  return std::make_unique<DiscConvRewriterPass<mhlo::DynamicConvOp>>(cc_major,
+                                                                     cc_minor);
+}
+
+std::unique_ptr<OperationPass<func::FuncOp>> createDiscQuantizedConvRewriter(
+    int cc_major, int cc_minor) {
+  return std::make_unique<
+      DiscConvRewriterPass<mlir::mhlo_disc::QuantizedDynamicConvOp>>(cc_major,
+                                                                     cc_minor);
 }
 
 }  // namespace disc_ral

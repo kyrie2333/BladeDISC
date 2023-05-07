@@ -83,9 +83,6 @@ struct TaoBridgeOptions {
   // compilation cache capacity
   int64 cache_capacity;
 
-  // Blade-CPU used options
-  bool tvm_using_proto;
-
   // tao whale options
   bool seperate_whale_micro_batch;
 
@@ -114,6 +111,10 @@ struct TaoBridgeOptions {
   // set max/min cluster size for training tasks
   int64 train_task_max_cluster_size;
   int64 train_task_min_cluster_size;
+
+  // Support for ops in feature columns are still in-progress
+  // Default to false
+  bool experimental_enable_cpu_sparse_ops_compilation;
 };
 
 // Get the globally singleton of TaoBridgeOptions.

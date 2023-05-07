@@ -18,7 +18,7 @@ limitations under the License.
 // only actually implementing the Convert op for that element type. This is
 // generally not the fastest approach, but it works.
 
-#include "mlir-hlo/Dialect/mhlo/IR/hlo_ops.h"
+#include "mhlo/IR/hlo_ops.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"                // from @llvm-project
 #include "mlir/IR/Attributes.h"                          // from @llvm-project
 #include "mlir/IR/Location.h"                            // from @llvm-project
@@ -28,7 +28,7 @@ limitations under the License.
 #include "mlir/Pass/Pass.h"                              // from @llvm-project
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"  // from @llvm-project
 #include "mlir/Transforms/Passes.h"                      // from @llvm-project
-#include "transforms/PassDetail.h"
+#include "mlir/disc/transforms/PassDetail.h"
 
 namespace mlir {
 namespace disc_ral {
@@ -58,7 +58,7 @@ mhlo::ReduceOp CloneAndReplaceElementType(mhlo::ReduceOp op,
                                           ArrayRef<Value> operands) {
   int num_non_return_hlo_ops = 0;
   Operation* map_op = nullptr;
-  op.body().walk([&](Operation* hlo_op) {
+  op.getBody().walk([&](Operation* hlo_op) {
     if (isa<mhlo::ReturnOp>(hlo_op)) return;
     ++num_non_return_hlo_ops;
     map_op = hlo_op;
@@ -69,27 +69,29 @@ mhlo::ReduceOp CloneAndReplaceElementType(mhlo::ReduceOp op,
 
   Location loc = op.getLoc();
   mhlo::ReduceOp new_op = rewriter.create<mhlo::ReduceOp>(
-      loc, operands[0], operands[1], op.dimensions());
+      loc, operands[0], operands[1], op.getDimensions());
 
   if (isa<mhlo::AddOp>(map_op)) {
-    BuildReduceBody<mhlo::AddOp>(elem_type, &new_op.body(), &rewriter);
+    BuildReduceBody<mhlo::AddOp>(elem_type, &new_op.getBody(), &rewriter);
   } else if (isa<mhlo::MulOp>(map_op)) {
-    BuildReduceBody<mhlo::MulOp>(elem_type, &new_op.body(), &rewriter);
+    BuildReduceBody<mhlo::MulOp>(elem_type, &new_op.getBody(), &rewriter);
   } else if (isa<mhlo::MaxOp>(map_op)) {
-    BuildReduceBody<mhlo::MaxOp>(elem_type, &new_op.body(), &rewriter);
+    BuildReduceBody<mhlo::MaxOp>(elem_type, &new_op.getBody(), &rewriter);
   } else if (isa<mhlo::MinOp>(map_op)) {
-    BuildReduceBody<mhlo::MinOp>(elem_type, &new_op.body(), &rewriter);
+    BuildReduceBody<mhlo::MinOp>(elem_type, &new_op.getBody(), &rewriter);
   } else if (isa<mhlo::AndOp>(map_op)) {
     // We use MinOp to replace AndOp since std AndOp requires operands have i1
     // type.
-    BuildReduceBody<mhlo::MinOp>(elem_type, &new_op.body(), &rewriter);
+    BuildReduceBody<mhlo::MinOp>(elem_type, &new_op.getBody(), &rewriter);
   } else if (isa<mhlo::OrOp>(map_op)) {
     // We use MaxOp to replace OrOp since std AndOp requires operands have i1
     // type.
-    BuildReduceBody<mhlo::MaxOp>(elem_type, &new_op.body(), &rewriter);
+    BuildReduceBody<mhlo::MaxOp>(elem_type, &new_op.getBody(), &rewriter);
   } else {
     assert(false && "not supported reduce type");
   }
+
+  new_op->setAttrs(op->getAttrs());
 
   return new_op;
 }
@@ -106,7 +108,7 @@ struct ConvertReduceOpWithSmallWidthIntType
     }
 
     SmallVector<int64_t, 4> dims_to_reduce;
-    for (auto v : op.dimensions().getValues<APInt>()) {
+    for (auto v : op.getDimensions().getValues<APInt>()) {
       dims_to_reduce.push_back(v.getSExtValue());
     }
     RankedTensorType ty =
@@ -202,8 +204,8 @@ struct ConvertDotGeneralOp : public OpRewritePattern<mhlo::DotGeneralOp> {
   LogicalResult matchAndRewrite(mhlo::DotGeneralOp op,
                                 PatternRewriter& rewriter) const override {
     Location loc = op.getLoc();
-    Value lhs = op.lhs();
-    Value rhs = op.rhs();
+    Value lhs = op.getLhs();
+    Value rhs = op.getRhs();
     FloatType f16_ty = rewriter.getF16Type();
     FloatType f32_ty = rewriter.getF32Type();
     RankedTensorType lhs_ty = lhs.getType().dyn_cast<RankedTensorType>();
@@ -221,7 +223,7 @@ struct ConvertDotGeneralOp : public OpRewritePattern<mhlo::DotGeneralOp> {
         RankedTensorType::getChecked(loc, result_ty.getShape(), f16_ty);
     // tensor dot general
     Value dot = rewriter.create<mhlo::DotGeneralOp>(
-        loc, f16_tensor_ty, lhs_f16, rhs_f16, op.dot_dimension_numbers(),
+        loc, f16_tensor_ty, lhs_f16, rhs_f16, op.getDotDimensionNumbers(),
         nullptr);
     Value fp32_dot = rewriter.create<mhlo::ConvertOp>(loc, dot, f32_ty);
     fp32_dot.setType(op.getResult().getType());
@@ -230,12 +232,113 @@ struct ConvertDotGeneralOp : public OpRewritePattern<mhlo::DotGeneralOp> {
   }
 };
 
+template <typename OpTy>
+struct ElementwiseOpTypeConverter : public OpRewritePattern<OpTy> {
+  ElementwiseOpTypeConverter(MLIRContext* context, Type from, Type to)
+      : OpRewritePattern<OpTy>::OpRewritePattern(context) {
+    this->from_ = from;
+    this->to_ = to;
+  }
+
+  LogicalResult matchAndRewrite(OpTy op,
+                                PatternRewriter& rewriter) const override {
+    Location loc = op.getLoc();
+
+    auto compareElemTy = [&](Type ty) {
+      auto tensorTy = ty.dyn_cast<RankedTensorType>();
+      if (!tensorTy) return false;
+      return tensorTy.getElementType() == this->from_;
+    };
+
+    if (!llvm::all_of(op->getOperandTypes(), compareElemTy) ||
+        !llvm::all_of(op->getResultTypes(), compareElemTy))
+      return failure();
+
+    SmallVector<Value> newOperands;
+    for (Value operand : op->getOperands()) {
+      auto rankedTy = operand.getType().cast<RankedTensorType>();
+      auto newTy = RankedTensorType::get(rankedTy.getShape(), this->to_,
+                                         rankedTy.getEncoding());
+      newOperands.push_back(
+          rewriter.create<mhlo::ConvertOp>(loc, newTy, operand));
+    }
+    SmallVector<Type> newTypes;
+    for (Type ty : op->getResultTypes()) {
+      auto rankedTy = ty.cast<RankedTensorType>();
+      newTypes.push_back(RankedTensorType::get(rankedTy.getShape(), this->to_,
+                                               rankedTy.getEncoding()));
+    }
+    auto newOp =
+        rewriter.create<OpTy>(loc, newTypes, newOperands, op->getAttrs());
+    SmallVector<Value> newResults;
+    for (Value result : newOp->getResults()) {
+      auto rankedTy = result.getType().cast<RankedTensorType>();
+      auto newTy = RankedTensorType::get(rankedTy.getShape(), this->from_,
+                                         rankedTy.getEncoding());
+      newResults.push_back(
+          rewriter.create<mhlo::ConvertOp>(loc, newTy, result));
+    }
+    rewriter.replaceOp(op, newResults);
+    return success();
+  }
+
+  Type from_;
+  Type to_;
+};
+
+struct ReduceOpTypeConverter : public OpRewritePattern<mhlo::ReduceOp> {
+  ReduceOpTypeConverter(MLIRContext* context, Type from, Type to)
+      : OpRewritePattern<mhlo::ReduceOp>::OpRewritePattern(context) {
+    this->from_ = from;
+    this->to_ = to;
+  }
+
+  LogicalResult matchAndRewrite(mhlo::ReduceOp op,
+                                PatternRewriter& rewriter) const override {
+    Location loc = op.getLoc();
+
+    auto compareElemTy = [&](Type ty) {
+      auto tensorTy = ty.dyn_cast<RankedTensorType>();
+      if (!tensorTy) return false;
+      return tensorTy.getElementType() == this->from_;
+    };
+
+    if (!llvm::all_of(op->getOperandTypes(), compareElemTy) ||
+        !llvm::all_of(op->getResultTypes(), compareElemTy))
+      return failure();
+
+    SmallVector<Value> newOperands;
+    for (Value operand : op->getOperands())
+      newOperands.push_back(
+          rewriter.create<mhlo::ConvertOp>(loc, operand, this->to_));
+
+    mhlo::ReduceOp newOp =
+        CloneAndReplaceElementType(op, rewriter, this->to_, newOperands);
+    assert(newOp && "convert element type of reduce op failed");
+
+    SmallVector<Value> newResults;
+    for (Value result : newOp->getResults())
+      newResults.push_back(
+          rewriter.create<mhlo::ConvertOp>(loc, result, this->from_));
+    rewriter.replaceOp(op, newResults);
+    return success();
+  }
+
+  Type from_;
+  Type to_;
+};
+
 struct ElementTypeConverterPass
     : public ElementTypeConverterPassBase<ElementTypeConverterPass> {
-  explicit ElementTypeConverterPass(bool enable_fp16_gemm)
+  explicit ElementTypeConverterPass(bool enable_fp16_gemm,
+                                    bool enable_fp16_conv,
+                                    bool promote_fp16_sensitive_ops_to_f32)
       : ElementTypeConverterPassBase<
             ElementTypeConverterPass>::ElementTypeConverterPassBase() {
     this->enable_fp16_gemm_ = enable_fp16_gemm;
+    this->enable_fp16_conv_ = enable_fp16_conv;
+    this->promote_fp16_sensitive_ops_to_f32_ =
+        promote_fp16_sensitive_ops_to_f32;
   }
 
   void runOnOperation() override {
@@ -244,8 +347,21 @@ struct ElementTypeConverterPass
     RewritePatternSet patterns(&ctx);
     patterns.insert<ConvertReduceOpWithSmallWidthIntType>(&ctx);
     if (enable_fp16_gemm_) {
-      patterns.insert<ConvertDotGeneralOp, ConvertConvOp<mhlo::DynamicConvOp>,
+      patterns.insert<ConvertDotGeneralOp>(&ctx);
+    }
+    if (enable_fp16_conv_) {
+      patterns.insert<ConvertConvOp<mhlo::DynamicConvOp>,
                       ConvertConvOp<mhlo::ConvolutionOp>>(&ctx);
+    }
+
+    if (promote_fp16_sensitive_ops_to_f32_) {
+      FloatType f16_ty = FloatType::getF16(&ctx);
+      FloatType f32_ty = FloatType::getF32(&ctx);
+      patterns.insert<ElementwiseOpTypeConverter<mhlo::RsqrtOp>>(&ctx, f16_ty,
+                                                                 f32_ty);
+      patterns.insert<ElementwiseOpTypeConverter<mhlo::TanhOp>>(&ctx, f16_ty,
+                                                                f32_ty);
+      patterns.insert<ReduceOpTypeConverter>(&ctx, f16_ty, f32_ty);
     }
 
     if (failed(applyPatternsAndFoldGreedily(func, std::move(patterns)))) {
@@ -258,8 +374,10 @@ struct ElementTypeConverterPass
 }  // namespace
 
 std::unique_ptr<OperationPass<func::FuncOp>> createDiscElementTypeConverterPass(
-    bool enable_fp16_gemm) {
-  return std::make_unique<ElementTypeConverterPass>(enable_fp16_gemm);
+    bool enable_fp16_gemm, bool enable_fp16_conv,
+    bool promote_fp16_sensitive_ops_to_f32) {
+  return std::make_unique<ElementTypeConverterPass>(
+      enable_fp16_gemm, enable_fp16_conv, promote_fp16_sensitive_ops_to_f32);
 }
 
 }  // namespace disc_ral
