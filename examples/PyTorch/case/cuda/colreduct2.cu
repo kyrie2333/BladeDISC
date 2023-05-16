@@ -5,9 +5,10 @@
 
 #define M 8192
 #define N 2560
-// #define THREAD_ELEMENT_NUM 16
-#define TILE_SIZE 256
 #define BLOCK_SIZE 32
+#define BLOCK_X 32
+#define BLOCK_Y 16
+#define TILE_SIZE (M / BLOCK_Y)
 
 #define WARMUPS 100
 #define ITERS 200
@@ -34,19 +35,20 @@
   total += elapsed;
 
 // check result
+// | (real - expected) / expected |
 void check_result(float* host_ref, float* gpu_ref) {
   double epsilon = 1.0E-5;
   bool match = 1;
-  // | (real - expected) / expected |
   for (int i = 0; i < N; i++) {
     if (abs((host_ref[i] - gpu_ref[i]) / host_ref[i]) > epsilon) {
       match = 0;
       printf("Arrays do not match!\n");
-      printf("host %5.8f gpu %5.8f at index %d, error %5.8f\n", host_ref[i], gpu_ref[i], i, abs((host_ref[i] - gpu_ref[i]) / host_ref[i]));
+      printf("host %5.8f gpu %5.8f at index %d, error %5.8f\n", host_ref[i],
+             gpu_ref[i], i, abs((host_ref[i] - gpu_ref[i]) / host_ref[i]));
       break;
     }
   }
-  if (match) printf("Results match.\n");
+  if (match) printf("Results match!\n");
 }
 
 // column reduction on host
@@ -68,12 +70,9 @@ __device__ void warp_reduce(volatile float* sdata, int tid) {
   sdata[tid] += sdata[tid + 1];
 }
 
-
 // colume reduction for a mtrix, 1D grid and 2D block
 __global__ void column_reduce_trans(float* data_in, float* data_out) {
-  // shared memory for each block
-  // __shared__ float sdata[BLOCK_SIZE*BLOCK_SIZE];
-  __shared__ float sdata[BLOCK_SIZE][BLOCK_SIZE];
+  __shared__ float sdata[BLOCK_X][BLOCK_Y];
 
   int col = blockIdx.x * blockDim.x + threadIdx.x;
   // int tid = threadIdx.x + threadIdx.y * blockDim.x;
@@ -83,25 +82,26 @@ __global__ void column_reduce_trans(float* data_in, float* data_out) {
   for (int i = 0; i < TILE_SIZE; i++) {
     accum += data_in[(i + TILE_SIZE * threadIdx.y) * N + col];
   }
-  // sdata[threadIdx.x * BLOCK_SIZE + threadIdx.y] = accum;
   sdata[threadIdx.x][threadIdx.y] = accum;
   __syncthreads();
 
-
   // printf("1 thread.x = %d, thread.y = %d, sdata[y][x] = %f\n", \
-        threadIdx.x, threadIdx.y, sdata[threadIdx.y][threadIdx.x]);  
-  warp_reduce(sdata[threadIdx.y], threadIdx.x);
-  __syncthreads();
+        threadIdx.x, threadIdx.y, sdata[threadIdx.y][threadIdx.x]);
+  for (int stride = BLOCK_Y / 2; stride > 0; stride >>= 1) {
+    if (threadIdx.y < stride) {
+      sdata[threadIdx.x][threadIdx.y] +=
+          sdata[threadIdx.x][threadIdx.y + stride];
+    }
+    __syncthreads();
+  }
+//   warp_reduce(sdata[threadIdx.x], threadIdx.y);
+//   __syncthreads();
   // printf("2 thread.x = %d, thread.y = %d, sdata[y][x] = %f\n", \
         threadIdx.x, threadIdx.y, sdata[threadIdx.y][threadIdx.x]);
 
-  // if (threadIdx.x % 32 == 0 ) {
-  //     atomicAdd(&sdata[threadIdx.y][0], sdata[threadIdx.y][threadIdx.x]);
-  // }
-
   // block reduction
-  if (threadIdx.y % BLOCK_SIZE == 0) {
-    data_out[blockIdx.x * BLOCK_SIZE + threadIdx.x] = sdata[threadIdx.x][0];
+  if (threadIdx.y % BLOCK_Y == 0) {
+    data_out[col] = sdata[threadIdx.x][0];
   }
 }
 
@@ -113,8 +113,8 @@ int main() {
 
   // initialize matrix
   for (int i = 0; i < M * N; i++) {
-    matrix[i] = (float)rand() / RAND_MAX;
-    // matrix[i] = 1.0f;
+    // matrix[i] = (float)rand() / RAND_MAX;
+    matrix[i] = 1.0f;
   }
 
   // allocate memory for matrix and result on device
@@ -124,13 +124,14 @@ int main() {
   CHECK(cudaMemcpy(d_matrix, matrix, M * N * sizeof(float),
                    cudaMemcpyHostToDevice));
 
-  dim3 block(BLOCK_SIZE, BLOCK_SIZE);
+  dim3 block(BLOCK_X, BLOCK_Y);
+  //   dim3 block(BLOCK_SIZE, BLOCK_SIZE);
   // dim3 grid((N + BLOCK_SIZE - 1) / BLOCK_SIZE, (M + BLOCK_SIZE - 1) /
   // BLOCK_SIZE / TILE_SIZE);
-  dim3 grid((N + BLOCK_SIZE - 1) / BLOCK_SIZE, 1);
+  dim3 grid((N + BLOCK_X - 1) / BLOCK_X, 1);
 
-  for (int i = 0; i < WARMUPS; ++i)
-    column_reduce_trans<<<grid, block>>>(d_matrix, d_result);
+  // for (int i = 0; i < WARMUPS; ++i)
+    // column_reduce_trans<<<grid, block>>>(d_matrix, d_result);
 
   float total = 0.;
   float elapsed = 0.;
@@ -139,7 +140,7 @@ int main() {
   cudaEventCreate(&stop);
   cudaEventRecord(start, 0);
 
-  for (int i = 0; i < ITERS; ++i)
+  // for (int i = 0; i < ITERS; ++i)
     column_reduce_trans<<<grid, block>>>(d_matrix, d_result);
 
   GpuElapse(start, stop, elapsed, total);
@@ -154,6 +155,11 @@ int main() {
 
   // check result
   check_result(h_result, result);
+
+  // for(int i = 0; i < N; i++){
+  //     if(result[i] != M)
+  //         printf("res[%d] = %f\t", i, result[i]);
+  // }
 
   free(matrix);
   free(result);

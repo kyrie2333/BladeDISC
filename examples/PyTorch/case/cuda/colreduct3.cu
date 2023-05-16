@@ -90,19 +90,8 @@ __global__ void column_reduce(float* data_in, float* data_out) {
     }
     __syncthreads();
   }
-    // if(threadIdx.y < 16) {
-    //     warp_reduce(sdata[threadIdx.x], threadIdx.y);
-    // }
-//   __syncthreads();
+  
 
-
-  // method 2: warp shuffle in a line width <= 32, then atomicAdd each sum
-//   if (threadIdx.y % 32 == 0) {
-//     warp_reduce(sdata[threadIdx.x][threadIdx.y], threadIdx.y);
-//   }
-//   __syncthreads();
-
-//   if (col < N) {
   if (threadIdx.y == 0) {
       atomicAdd(&data_out[col], sdata[threadIdx.x][0]);
     }

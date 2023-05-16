@@ -1,13 +1,14 @@
 #include <cuda_runtime.h>
-// #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
 
 #define M 8192
 #define N 2560
-#define THREAD_ELEMENT_NUM 128
-#define BLOCK_SIZE 256
+#define BLOCK_X 1
+#define BLOCK_Y 32
+#define TILE_SIZE (M / BLOCK_Y)
+#define WARP_SIZE 32
 
 #define WARMUPS 100
 #define ITERS 200
@@ -23,6 +24,7 @@
     }                                                        \
   }
 
+// elapsed time in millisecond
 #define CpuElapse(base, start) \
   base += ((double)(clock() - start)) * 1000 / CLOCKS_PER_SEC;
 
@@ -35,14 +37,16 @@
 // check result
 // | (real - expected) / expected |
 void check_result(float* host_ref, float* gpu_ref) {
-  double epsilon = 1.0E-5;
+  double epsilon = 1.0E-5 * 300;
   bool match = 1;
   for (int i = 0; i < N; i++) {
-    if (abs((host_ref[i] - gpu_ref[i]/300) / host_ref[i]) > epsilon) {
+    gpu_ref[i] /= 300;
+    if (abs((host_ref[i] - gpu_ref[i]) / host_ref[i]) > epsilon) {
       match = 0;
       printf("Arrays do not match!\n");
       printf("host %5.8f gpu %5.8f at index %d, error %5.8f\n", host_ref[i],
-             gpu_ref[i]/300, i, abs((host_ref[i] - gpu_ref[i]/300) / host_ref[i]));
+             gpu_ref[i], i,
+             abs((host_ref[i] - gpu_ref[i]) / host_ref[i]) * 100000);
       break;
     }
   }
@@ -60,59 +64,66 @@ void column_reduce_host(float* matrix, float* result) {
   }
 }
 
-// colume reduction for a mtrix, 1D grid and 1D block
-// each thread will reduce a column in a block
-// each accum of a block is reduce by atomicAdd
-__global__ void column_reduce(float* data_in, float* data_out) {
-  // get the column index
-  // int col = blockIdx.x * blockDim.x + threadIdx.x;
-  int col = (blockIdx.x % (N / BLOCK_SIZE)) * blockDim.x + threadIdx.x;
+__device__ void warp_reduce(volatile float* sdata, int tid) {
+  sdata[tid] += sdata[tid + 16];
+  sdata[tid] += sdata[tid + 8];
+  sdata[tid] += sdata[tid + 4];
+  sdata[tid] += sdata[tid + 2];
+  sdata[tid] += sdata[tid + 1];
+}
 
-  float accum = 0.0;
+// colume reduction for a mtrix, 1D grid and 2D block
+__global__ void column_reduce_trans(float* data_in, float* data_out) {
+  // __shared__ float sdata[BLOCK_X][BLOCK_Y];
+  int col = blockIdx.x * blockDim.x + threadIdx.x;
 
-  // for(int row = 0; row < M; row++){
-  //   accum += data_in[row * N + col];
-  // }
-  // data_out[col] = accum;
+  // local reduction
+  float accum = 0.0f;
+  for (int i = 0; i < TILE_SIZE; i++) {
+    accum += data_in[(i + TILE_SIZE * threadIdx.y) * N + col];
+  }
+  __syncwarp();
 
+  // Perform column reduction in a warp
+  // 16*32 block -> 16*16 block
+  for (int offset = WARP_SIZE / 2; offset >= BLOCK_X; offset /= 2) {
+    accum += __shfl_down_sync(0xFFFFFFFF, accum, offset);
 
-  for (int i = 0; i < THREAD_ELEMENT_NUM; i++) {
-    int row = (blockIdx.x /  (N / BLOCK_SIZE)) * THREAD_ELEMENT_NUM + i;
-    // int row = (blockIdx.x / (N / BLOCK_SIZE)) * THREAD_ELEMENT_NUM + i;
-    if (row < M) accum += data_in[row * N + col];
+    // if (blockIdx.x == 0 && threadIdx.x == 0 && threadIdx.y == 0)
+      // printf("2 blockIdx = %d, thread.x = %d, thread.y = %d, accum = %f\n",
+      //        blockIdx.x, threadIdx.x, threadIdx.y, accum);
   }
 
-  atomicAdd(&data_out[col], accum);
+  if (threadIdx.y % (WARP_SIZE / BLOCK_X) == 0) {
+    atomicAdd(&data_out[col], accum);
+  }
 }
 
 int main() {
   // allocate memory for matrix and result on host
   float* matrix = (float*)malloc(M * N * sizeof(float));
-  float* result = (float*)malloc(N * sizeof(float));    // gpu result
-  float* h_result = (float*)malloc(N * sizeof(float));  // validation
+  float* result = (float*)malloc(N * sizeof(float));
+  float* h_result = (float*)malloc(N * sizeof(float));
 
   // initialize matrix
   for (int i = 0; i < M * N; i++) {
-    // matrix[i] = (float)rand() / RAND_MAX;
-    matrix[i] = 1.0;
+    matrix[i] = (float)rand() / RAND_MAX;
+    // matrix[i] = 1.0f;
+    // matrix[i] = (float)i;
   }
 
   // allocate memory for matrix and result on device
   float *d_matrix, *d_result;
   CHECK(cudaMalloc((void**)&d_matrix, M * N * sizeof(float)));
   CHECK(cudaMalloc((void**)&d_result, N * sizeof(float)));
-
   CHECK(cudaMemcpy(d_matrix, matrix, M * N * sizeof(float),
                    cudaMemcpyHostToDevice));
 
-  dim3 block(BLOCK_SIZE, 1);
-  // dim3 grid((N + BLOCK_SIZE - 1) / BLOCK_SIZE , 1);
-  dim3 grid((N + BLOCK_SIZE - 1) / BLOCK_SIZE * (M / THREAD_ELEMENT_NUM), 1);
-  // printf("grid.x %d grid.y %d block.x %d block.y %d\n", grid.x, grid.y, block.x,
-        //  block.y);
+  dim3 block(BLOCK_X, BLOCK_Y);
+  dim3 grid((N + BLOCK_X - 1) / BLOCK_X, 1);
 
   for (int i = 0; i < WARMUPS; ++i)
-    column_reduce<<<grid, block>>>(d_matrix, d_result);
+    column_reduce_trans<<<grid, block>>>(d_matrix, d_result);
 
   float total = 0.;
   float elapsed = 0.;
@@ -122,7 +133,7 @@ int main() {
   cudaEventRecord(start, 0);
 
   for (int i = 0; i < ITERS; ++i)
-    column_reduce<<<grid, block>>>(d_matrix, d_result);
+    column_reduce_trans<<<grid, block>>>(d_matrix, d_result);
 
   GpuElapse(start, stop, elapsed, total);
   printf("column_reduce Time elapsed %f us\n", elapsed / ITERS * 1000);
@@ -134,13 +145,8 @@ int main() {
   // column reduction on host
   column_reduce_host(matrix, h_result);
 
-  // // check result
+  // check result
   check_result(h_result, result);
-
-
-  // for(int i = 0; i < N; i++){
-  //     printf("result[%d] = %f ", i, result[i]);
-  // }
 
   free(matrix);
   free(result);
