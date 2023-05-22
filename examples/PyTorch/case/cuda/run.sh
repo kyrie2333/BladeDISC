@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# FILE=colreduct1
-FILE=colreduct2.5
+FILE=colreduct1
+# FILE=colreduct2.5
 # FILE=colreduct3
 
 nvcc -o ${FILE} ${FILE}.cu

@@ -38,11 +38,12 @@ void check_result(float* host_ref, float* gpu_ref) {
   double epsilon = 1.0E-5;
   bool match = 1;
   for (int i = 0; i < N; i++) {
-    if (abs((host_ref[i] - gpu_ref[i]/300) / host_ref[i]) > epsilon) {
+    gpu_ref[i] /= 300;
+    if (abs((host_ref[i] - gpu_ref[i]) / host_ref[i]) > epsilon) {
       match = 0;
       printf("Arrays do not match!\n");
       printf("host %5.8f gpu %5.8f at index %d, error %5.8f\n", host_ref[i],
-             gpu_ref[i]/300, i, abs((host_ref[i] - gpu_ref[i]/300) / host_ref[i]));
+             gpu_ref[i], i, abs((host_ref[i] - gpu_ref[i]) / host_ref[i]));
       break;
     }
   }
@@ -66,7 +67,9 @@ void column_reduce_host(float* matrix, float* result) {
 __global__ void column_reduce(float* data_in, float* data_out) {
   // get the column index
   // int col = blockIdx.x * blockDim.x + threadIdx.x;
-  int col = (blockIdx.x % (N / BLOCK_SIZE)) * blockDim.x + threadIdx.x;
+  int block_x = blockIdx.x % ((N + BLOCK_SIZE - 1) / BLOCK_SIZE);
+  int block_y = blockIdx.x / ((N + BLOCK_SIZE - 1) / BLOCK_SIZE);
+  int col = block_x * blockDim.x + threadIdx.x;
 
   float accum = 0.0;
 
@@ -77,7 +80,7 @@ __global__ void column_reduce(float* data_in, float* data_out) {
 
 
   for (int i = 0; i < THREAD_ELEMENT_NUM; i++) {
-    int row = (blockIdx.x /  (N / BLOCK_SIZE)) * THREAD_ELEMENT_NUM + i;
+    int row = block_y * THREAD_ELEMENT_NUM + i;
     // int row = (blockIdx.x / (N / BLOCK_SIZE)) * THREAD_ELEMENT_NUM + i;
     if (row < M) accum += data_in[row * N + col];
   }
@@ -107,7 +110,8 @@ int main() {
 
   dim3 block(BLOCK_SIZE, 1);
   // dim3 grid((N + BLOCK_SIZE - 1) / BLOCK_SIZE , 1);
-  dim3 grid((N + BLOCK_SIZE - 1) / BLOCK_SIZE * (M / THREAD_ELEMENT_NUM), 1);
+  int grid_y = M / THREAD_ELEMENT_NUM;
+  dim3 grid((N + BLOCK_SIZE - 1) / BLOCK_SIZE * grid_y, 1);
   // printf("grid.x %d grid.y %d block.x %d block.y %d\n", grid.x, grid.y, block.x,
         //  block.y);
 
