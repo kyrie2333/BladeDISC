@@ -1,0 +1,3 @@
+Time (%),Total Time (ns),Instances,Avg (ns),Med (ns),Min (ns),Max (ns),StdDev (ns),Name
+97.6,193503,1,193503.0,193503.0,193503,193503,0.0,main_kColReduction_reduce__4_1_0___8w32h_1
+2.4,4736,1,4736.0,4736.0,4736,4736,0.0,main_kColReduction_reduce__4_1_0___8w32h

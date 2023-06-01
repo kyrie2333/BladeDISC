@@ -1,0 +1,2211 @@
+Results for  reduction2 :
+BLOCK_X=8: Count=47
+BLOCK_X=16: Count=965
+BLOCK_X=32: Count=1938
+
+BLOCK_Y=8: Count=1913
+BLOCK_Y=16: Count=780
+BLOCK_Y=32: Count=257
+
+TILE_SIZE=64: Count=808
+TILE_SIZE=128: Count=457
+TILE_SIZE=192: Count=344
+TILE_SIZE=256: Count=297
+TILE_SIZE=320: Count=214
+TILE_SIZE=384: Count=186
+TILE_SIZE=448: Count=153
+TILE_SIZE=512: Count=115
+TILE_SIZE=576: Count=89
+TILE_SIZE=640: Count=82
+TILE_SIZE=704: Count=69
+TILE_SIZE=768: Count=52
+TILE_SIZE=832: Count=38
+TILE_SIZE=896: Count=25
+TILE_SIZE=960: Count=12
+TILE_SIZE=1024: Count=9
+
+BLOCK_X=8, BLOCK_Y=16, TILE_SIZE=64:
+Min shape: (1024, 512)
+Max shape: (8192, 7168)
+
+BLOCK_X=8, BLOCK_Y=16, TILE_SIZE=192:
+Min shape: (3072, 2048)
+Max shape: (6144, 4096)
+
+BLOCK_X=8, BLOCK_Y=16, TILE_SIZE=256:
+Min shape: (4096, 1536)
+Max shape: (7168, 2560)
+
+BLOCK_X=8, BLOCK_Y=16, TILE_SIZE=384:
+Min shape: (6656, 1536)
+Max shape: (7680, 2048)
+
+BLOCK_X=8, BLOCK_Y=16, TILE_SIZE=448:
+Min shape: (7168, 2048)
+Max shape: (7168, 2560)
+
+BLOCK_X=8, BLOCK_Y=32, TILE_SIZE=64:
+Min shape: (2048, 512)
+Max shape: (2048, 512)
+
+BLOCK_X=8, BLOCK_Y=32, TILE_SIZE=256:
+Min shape: (8192, 1536)
+Max shape: (8192, 1536)
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=64:
+Min shape: (512, 512)
+Max shape: (8192, 8192)
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=128:
+Min shape: (1024, 512)
+Max shape: (8192, 8192)
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=192:
+Min shape: (1536, 1536)
+Max shape: (8192, 8192)
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=256:
+Min shape: (2048, 1536)
+Max shape: (8192, 8192)
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=320:
+Min shape: (2560, 1536)
+Max shape: (8192, 8192)
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=384:
+Min shape: (3072, 1536)
+Max shape: (8192, 8192)
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=448:
+Min shape: (3584, 2048)
+Max shape: (8192, 8192)
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=512:
+Min shape: (4096, 2048)
+Max shape: (8192, 8192)
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=576:
+Min shape: (4608, 2560)
+Max shape: (8192, 8192)
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=640:
+Min shape: (5120, 2560)
+Max shape: (8192, 8192)
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=704:
+Min shape: (5632, 3072)
+Max shape: (8192, 6656)
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=768:
+Min shape: (6144, 3584)
+Max shape: (8192, 6144)
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=832:
+Min shape: (6656, 4096)
+Max shape: (8192, 6656)
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=896:
+Min shape: (7168, 5120)
+Max shape: (8192, 6144)
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=960:
+Min shape: (8192, 5632)
+Max shape: (8192, 6144)
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=1024:
+Min shape: (8192, 5632)
+Max shape: (8192, 6144)
+
+BLOCK_X=16, BLOCK_Y=16, TILE_SIZE=64:
+Min shape: (1024, 512)
+Max shape: (8192, 8192)
+
+BLOCK_X=16, BLOCK_Y=16, TILE_SIZE=128:
+Min shape: (2048, 1024)
+Max shape: (8192, 5632)
+
+BLOCK_X=16, BLOCK_Y=16, TILE_SIZE=192:
+Min shape: (3072, 1536)
+Max shape: (8192, 6144)
+
+BLOCK_X=16, BLOCK_Y=16, TILE_SIZE=256:
+Min shape: (4096, 1536)
+Max shape: (8192, 4608)
+
+BLOCK_X=16, BLOCK_Y=16, TILE_SIZE=320:
+Min shape: (5120, 1536)
+Max shape: (8192, 3072)
+
+BLOCK_X=16, BLOCK_Y=16, TILE_SIZE=384:
+Min shape: (6144, 1536)
+Max shape: (8192, 3072)
+
+BLOCK_X=16, BLOCK_Y=16, TILE_SIZE=448:
+Min shape: (7168, 2048)
+Max shape: (8192, 3072)
+
+BLOCK_X=16, BLOCK_Y=16, TILE_SIZE=512:
+Min shape: (8192, 2048)
+Max shape: (8192, 3072)
+
+BLOCK_X=16, BLOCK_Y=32, TILE_SIZE=64:
+Min shape: (2048, 512)
+Max shape: (8192, 5632)
+
+BLOCK_X=16, BLOCK_Y=32, TILE_SIZE=128:
+Min shape: (4096, 1536)
+Max shape: (8192, 3072)
+
+BLOCK_X=16, BLOCK_Y=32, TILE_SIZE=192:
+Min shape: (6656, 1536)
+Max shape: (8192, 1536)
+
+BLOCK_X=16, BLOCK_Y=32, TILE_SIZE=256:
+Min shape: (8192, 1536)
+Max shape: (8192, 1536)
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=64:
+Min shape: (512, 512)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=128:
+Min shape: (1024, 1024)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=192:
+Min shape: (1536, 1024)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=256:
+Min shape: (2048, 1536)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=320:
+Min shape: (2560, 1536)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=384:
+Min shape: (3072, 1536)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=448:
+Min shape: (3584, 2048)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=512:
+Min shape: (4096, 2048)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=576:
+Min shape: (4608, 2560)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=640:
+Min shape: (5120, 2560)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=704:
+Min shape: (5632, 2560)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=768:
+Min shape: (6144, 2560)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=832:
+Min shape: (6656, 3072)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=896:
+Min shape: (7168, 3072)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=960:
+Min shape: (7680, 4096)
+Max shape: (8192, 7168)
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=1024:
+Min shape: (8192, 4096)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=16, TILE_SIZE=64:
+Min shape: (1024, 512)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=16, TILE_SIZE=128:
+Min shape: (2048, 1536)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=16, TILE_SIZE=192:
+Min shape: (3072, 1536)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=16, TILE_SIZE=256:
+Min shape: (4096, 1536)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=16, TILE_SIZE=320:
+Min shape: (5120, 2560)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=16, TILE_SIZE=384:
+Min shape: (6144, 2048)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=16, TILE_SIZE=448:
+Min shape: (7168, 2048)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=16, TILE_SIZE=512:
+Min shape: (8192, 2560)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=32, TILE_SIZE=64:
+Min shape: (2048, 1024)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=32, TILE_SIZE=128:
+Min shape: (4096, 1536)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=32, TILE_SIZE=192:
+Min shape: (6144, 1536)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, BLOCK_Y=32, TILE_SIZE=256:
+Min shape: (8192, 2048)
+Max shape: (8192, 8192)
+
+BLOCK_X=8, BLOCK_Y=16, TILE_SIZE=64:
+M=1024: Count=2
+M=1536: Count=3
+M=2048: Count=1
+M=2560: Count=2
+M=3072: Count=4
+M=3584: Count=4
+M=4096: Count=2
+M=4608: Count=1
+M=5120: Count=2
+M=5632: Count=2
+M=6144: Count=2
+M=6656: Count=2
+M=7168: Count=4
+M=7680: Count=1
+M=8192: Count=1
+
+BLOCK_X=8, BLOCK_Y=16, TILE_SIZE=192:
+M=3072: Count=1
+M=5120: Count=1
+M=5632: Count=1
+M=6144: Count=1
+
+BLOCK_X=8, BLOCK_Y=16, TILE_SIZE=256:
+M=4096: Count=1
+M=6656: Count=1
+M=7168: Count=2
+
+BLOCK_X=8, BLOCK_Y=16, TILE_SIZE=384:
+M=6656: Count=1
+M=7680: Count=1
+
+BLOCK_X=8, BLOCK_Y=16, TILE_SIZE=448:
+M=7168: Count=2
+
+BLOCK_X=8, BLOCK_Y=32, TILE_SIZE=64:
+M=2048: Count=1
+
+BLOCK_X=8, BLOCK_Y=32, TILE_SIZE=256:
+M=8192: Count=1
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=64:
+M=512: Count=16
+M=1024: Count=13
+M=1536: Count=13
+M=2048: Count=13
+M=2560: Count=14
+M=3072: Count=12
+M=3584: Count=12
+M=4096: Count=11
+M=4608: Count=15
+M=5120: Count=12
+M=5632: Count=10
+M=6144: Count=12
+M=6656: Count=10
+M=7168: Count=10
+M=7680: Count=9
+M=8192: Count=8
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=128:
+M=1024: Count=7
+M=1536: Count=9
+M=2048: Count=10
+M=2560: Count=8
+M=3072: Count=8
+M=3584: Count=8
+M=4096: Count=6
+M=4608: Count=7
+M=5120: Count=3
+M=5632: Count=3
+M=6144: Count=6
+M=6656: Count=3
+M=7168: Count=3
+M=7680: Count=4
+M=8192: Count=3
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=192:
+M=1536: Count=5
+M=2048: Count=6
+M=2560: Count=8
+M=3072: Count=7
+M=3584: Count=4
+M=4096: Count=4
+M=4608: Count=3
+M=5120: Count=3
+M=5632: Count=4
+M=6144: Count=4
+M=6656: Count=3
+M=7168: Count=3
+M=7680: Count=2
+M=8192: Count=2
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=256:
+M=2048: Count=7
+M=2560: Count=6
+M=3072: Count=7
+M=3584: Count=6
+M=4096: Count=7
+M=4608: Count=2
+M=5120: Count=3
+M=5632: Count=3
+M=6144: Count=5
+M=6656: Count=4
+M=7168: Count=3
+M=7680: Count=3
+M=8192: Count=3
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=320:
+M=2560: Count=8
+M=3072: Count=6
+M=3584: Count=5
+M=4096: Count=6
+M=4608: Count=5
+M=5120: Count=3
+M=5632: Count=4
+M=6144: Count=3
+M=6656: Count=2
+M=7168: Count=2
+M=7680: Count=2
+M=8192: Count=3
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=384:
+M=3072: Count=7
+M=3584: Count=5
+M=4096: Count=7
+M=4608: Count=7
+M=5120: Count=5
+M=5632: Count=2
+M=6144: Count=4
+M=6656: Count=2
+M=7168: Count=3
+M=7680: Count=2
+M=8192: Count=2
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=448:
+M=3584: Count=8
+M=4096: Count=6
+M=4608: Count=6
+M=5120: Count=6
+M=5632: Count=3
+M=6144: Count=5
+M=6656: Count=4
+M=7168: Count=4
+M=7680: Count=2
+M=8192: Count=3
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=512:
+M=4096: Count=6
+M=4608: Count=6
+M=5120: Count=4
+M=5632: Count=4
+M=6144: Count=6
+M=6656: Count=4
+M=7168: Count=3
+M=7680: Count=3
+M=8192: Count=4
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=576:
+M=4608: Count=4
+M=5120: Count=5
+M=5632: Count=4
+M=6144: Count=5
+M=6656: Count=3
+M=7168: Count=3
+M=7680: Count=3
+M=8192: Count=1
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=640:
+M=5120: Count=5
+M=5632: Count=5
+M=6144: Count=2
+M=6656: Count=5
+M=7168: Count=4
+M=7680: Count=4
+M=8192: Count=3
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=704:
+M=5632: Count=5
+M=6144: Count=5
+M=6656: Count=5
+M=7168: Count=3
+M=7680: Count=5
+M=8192: Count=2
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=768:
+M=6144: Count=3
+M=6656: Count=4
+M=7168: Count=5
+M=7680: Count=1
+M=8192: Count=3
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=832:
+M=6656: Count=5
+M=7168: Count=4
+M=7680: Count=2
+M=8192: Count=1
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=896:
+M=7168: Count=2
+M=7680: Count=1
+M=8192: Count=1
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=960:
+M=8192: Count=2
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=1024:
+M=8192: Count=2
+
+BLOCK_X=16, BLOCK_Y=16, TILE_SIZE=64:
+M=1024: Count=11
+M=1536: Count=11
+M=2048: Count=12
+M=2560: Count=9
+M=3072: Count=9
+M=3584: Count=9
+M=4096: Count=9
+M=4608: Count=8
+M=5120: Count=8
+M=5632: Count=6
+M=6144: Count=8
+M=6656: Count=6
+M=7168: Count=6
+M=7680: Count=6
+M=8192: Count=5
+
+BLOCK_X=16, BLOCK_Y=16, TILE_SIZE=128:
+M=2048: Count=3
+M=2560: Count=1
+M=3072: Count=2
+M=3584: Count=4
+M=4096: Count=2
+M=5120: Count=1
+M=5632: Count=1
+M=6144: Count=2
+M=6656: Count=3
+M=7168: Count=1
+M=8192: Count=1
+
+BLOCK_X=16, BLOCK_Y=16, TILE_SIZE=192:
+M=3072: Count=4
+M=3584: Count=1
+M=4608: Count=3
+M=5120: Count=3
+M=5632: Count=3
+M=6144: Count=3
+M=6656: Count=1
+M=7168: Count=2
+M=7680: Count=2
+M=8192: Count=2
+
+BLOCK_X=16, BLOCK_Y=16, TILE_SIZE=256:
+M=4096: Count=5
+M=4608: Count=2
+M=5120: Count=3
+M=5632: Count=3
+M=6144: Count=2
+M=6656: Count=3
+M=7168: Count=3
+M=7680: Count=1
+M=8192: Count=3
+
+BLOCK_X=16, BLOCK_Y=16, TILE_SIZE=320:
+M=5120: Count=1
+M=5632: Count=2
+M=6656: Count=1
+M=7168: Count=2
+M=7680: Count=3
+M=8192: Count=3
+
+BLOCK_X=16, BLOCK_Y=16, TILE_SIZE=384:
+M=6144: Count=2
+M=6656: Count=3
+M=7168: Count=1
+M=7680: Count=2
+M=8192: Count=2
+
+BLOCK_X=16, BLOCK_Y=16, TILE_SIZE=448:
+M=7168: Count=3
+M=7680: Count=2
+M=8192: Count=1
+
+BLOCK_X=16, BLOCK_Y=16, TILE_SIZE=512:
+M=8192: Count=2
+
+BLOCK_X=16, BLOCK_Y=32, TILE_SIZE=64:
+M=2048: Count=5
+M=2560: Count=1
+M=3072: Count=5
+M=3584: Count=4
+M=4096: Count=3
+M=4608: Count=2
+M=5120: Count=3
+M=5632: Count=3
+M=6144: Count=2
+M=6656: Count=2
+M=7168: Count=2
+M=7680: Count=2
+M=8192: Count=2
+
+BLOCK_X=16, BLOCK_Y=32, TILE_SIZE=128:
+M=4096: Count=2
+M=5632: Count=1
+M=6656: Count=1
+M=7168: Count=1
+M=7680: Count=1
+M=8192: Count=1
+
+BLOCK_X=16, BLOCK_Y=32, TILE_SIZE=192:
+M=6656: Count=1
+M=7168: Count=1
+M=7680: Count=1
+M=8192: Count=1
+
+BLOCK_X=16, BLOCK_Y=32, TILE_SIZE=256:
+M=8192: Count=1
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=64:
+M=512: Count=9
+M=1024: Count=9
+M=1536: Count=12
+M=2048: Count=12
+M=2560: Count=12
+M=3072: Count=11
+M=3584: Count=11
+M=4096: Count=14
+M=4608: Count=13
+M=5120: Count=14
+M=5632: Count=12
+M=6144: Count=13
+M=6656: Count=12
+M=7168: Count=13
+M=7680: Count=12
+M=8192: Count=13
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=128:
+M=1024: Count=4
+M=1536: Count=6
+M=2048: Count=10
+M=2560: Count=7
+M=3072: Count=12
+M=3584: Count=10
+M=4096: Count=12
+M=4608: Count=9
+M=5120: Count=12
+M=5632: Count=13
+M=6144: Count=12
+M=6656: Count=12
+M=7168: Count=9
+M=7680: Count=13
+M=8192: Count=13
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=192:
+M=1536: Count=6
+M=2048: Count=6
+M=2560: Count=7
+M=3072: Count=8
+M=3584: Count=7
+M=4096: Count=11
+M=4608: Count=10
+M=5120: Count=12
+M=5632: Count=12
+M=6144: Count=12
+M=6656: Count=12
+M=7168: Count=10
+M=7680: Count=12
+M=8192: Count=13
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=256:
+M=2048: Count=6
+M=2560: Count=6
+M=3072: Count=6
+M=3584: Count=5
+M=4096: Count=8
+M=4608: Count=11
+M=5120: Count=12
+M=5632: Count=7
+M=6144: Count=13
+M=6656: Count=14
+M=7168: Count=9
+M=7680: Count=12
+M=8192: Count=14
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=320:
+M=2560: Count=7
+M=3072: Count=5
+M=3584: Count=6
+M=4096: Count=8
+M=4608: Count=11
+M=5120: Count=10
+M=5632: Count=7
+M=6144: Count=10
+M=6656: Count=10
+M=7168: Count=9
+M=7680: Count=13
+M=8192: Count=11
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=384:
+M=3072: Count=7
+M=3584: Count=4
+M=4096: Count=7
+M=4608: Count=8
+M=5120: Count=9
+M=5632: Count=10
+M=6144: Count=9
+M=6656: Count=7
+M=7168: Count=9
+M=7680: Count=14
+M=8192: Count=12
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=448:
+M=3584: Count=8
+M=4096: Count=7
+M=4608: Count=7
+M=5120: Count=9
+M=5632: Count=9
+M=6144: Count=10
+M=6656: Count=10
+M=7168: Count=10
+M=7680: Count=5
+M=8192: Count=9
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=512:
+M=4096: Count=7
+M=4608: Count=3
+M=5120: Count=6
+M=5632: Count=7
+M=6144: Count=7
+M=6656: Count=10
+M=7168: Count=9
+M=7680: Count=9
+M=8192: Count=8
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=576:
+M=4608: Count=7
+M=5120: Count=7
+M=5632: Count=5
+M=6144: Count=6
+M=6656: Count=8
+M=7168: Count=8
+M=7680: Count=10
+M=8192: Count=10
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=640:
+M=5120: Count=9
+M=5632: Count=5
+M=6144: Count=6
+M=6656: Count=6
+M=7168: Count=8
+M=7680: Count=9
+M=8192: Count=11
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=704:
+M=5632: Count=7
+M=6144: Count=7
+M=6656: Count=6
+M=7168: Count=7
+M=7680: Count=9
+M=8192: Count=8
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=768:
+M=6144: Count=6
+M=6656: Count=4
+M=7168: Count=8
+M=7680: Count=8
+M=8192: Count=10
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=832:
+M=6656: Count=8
+M=7168: Count=6
+M=7680: Count=6
+M=8192: Count=6
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=896:
+M=7168: Count=8
+M=7680: Count=6
+M=8192: Count=7
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=960:
+M=7680: Count=5
+M=8192: Count=5
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=1024:
+M=8192: Count=7
+
+BLOCK_X=32, BLOCK_Y=16, TILE_SIZE=64:
+M=1024: Count=3
+M=1536: Count=5
+M=2048: Count=8
+M=2560: Count=6
+M=3072: Count=8
+M=3584: Count=8
+M=4096: Count=13
+M=4608: Count=10
+M=5120: Count=12
+M=5632: Count=8
+M=6144: Count=10
+M=6656: Count=11
+M=7168: Count=13
+M=7680: Count=10
+M=8192: Count=12
+
+BLOCK_X=32, BLOCK_Y=16, TILE_SIZE=128:
+M=2048: Count=3
+M=2560: Count=6
+M=3072: Count=8
+M=3584: Count=8
+M=4096: Count=11
+M=4608: Count=8
+M=5120: Count=10
+M=5632: Count=9
+M=6144: Count=9
+M=6656: Count=11
+M=7168: Count=12
+M=7680: Count=10
+M=8192: Count=11
+
+BLOCK_X=32, BLOCK_Y=16, TILE_SIZE=192:
+M=3072: Count=4
+M=3584: Count=5
+M=4096: Count=8
+M=4608: Count=7
+M=5120: Count=5
+M=5632: Count=8
+M=6144: Count=11
+M=6656: Count=12
+M=7168: Count=8
+M=7680: Count=7
+M=8192: Count=10
+
+BLOCK_X=32, BLOCK_Y=16, TILE_SIZE=256:
+M=4096: Count=7
+M=4608: Count=6
+M=5120: Count=5
+M=5632: Count=9
+M=6144: Count=9
+M=6656: Count=9
+M=7168: Count=11
+M=7680: Count=9
+M=8192: Count=10
+
+BLOCK_X=32, BLOCK_Y=16, TILE_SIZE=320:
+M=5120: Count=7
+M=5632: Count=3
+M=6144: Count=6
+M=6656: Count=7
+M=7168: Count=8
+M=7680: Count=8
+M=8192: Count=7
+
+BLOCK_X=32, BLOCK_Y=16, TILE_SIZE=384:
+M=6144: Count=7
+M=6656: Count=3
+M=7168: Count=9
+M=7680: Count=5
+M=8192: Count=8
+
+BLOCK_X=32, BLOCK_Y=16, TILE_SIZE=448:
+M=7168: Count=6
+M=7680: Count=2
+M=8192: Count=6
+
+BLOCK_X=32, BLOCK_Y=16, TILE_SIZE=512:
+M=8192: Count=7
+
+BLOCK_X=32, BLOCK_Y=32, TILE_SIZE=64:
+M=2048: Count=5
+M=2560: Count=1
+M=3072: Count=5
+M=3584: Count=5
+M=4096: Count=7
+M=4608: Count=4
+M=5120: Count=11
+M=5632: Count=10
+M=6144: Count=10
+M=6656: Count=9
+M=7168: Count=10
+M=7680: Count=9
+M=8192: Count=10
+
+BLOCK_X=32, BLOCK_Y=32, TILE_SIZE=128:
+M=4096: Count=8
+M=4608: Count=1
+M=5120: Count=7
+M=5632: Count=6
+M=6144: Count=11
+M=6656: Count=12
+M=7168: Count=10
+M=7680: Count=7
+M=8192: Count=9
+
+BLOCK_X=32, BLOCK_Y=32, TILE_SIZE=192:
+M=6144: Count=8
+M=6656: Count=1
+M=7168: Count=7
+M=7680: Count=6
+M=8192: Count=9
+
+BLOCK_X=32, BLOCK_Y=32, TILE_SIZE=256:
+M=8192: Count=9
+
+BLOCK_X=8, BLOCK_Y=16, TILE_SIZE=64:
+N=512: Count=2
+N=1536: Count=2
+N=1024: Count=1
+N=6656: Count=1
+N=7168: Count=1
+N=5120: Count=2
+N=6144: Count=1
+N=3584: Count=7
+N=4096: Count=3
+N=4608: Count=1
+N=5632: Count=2
+N=2560: Count=3
+N=2048: Count=4
+N=3072: Count=3
+
+BLOCK_X=8, BLOCK_Y=16, TILE_SIZE=192:
+N=4096: Count=1
+N=2048: Count=3
+
+BLOCK_X=8, BLOCK_Y=16, TILE_SIZE=256:
+N=2560: Count=1
+N=2048: Count=2
+N=1536: Count=1
+
+BLOCK_X=8, BLOCK_Y=16, TILE_SIZE=384:
+N=2048: Count=1
+N=1536: Count=1
+
+BLOCK_X=8, BLOCK_Y=16, TILE_SIZE=448:
+N=2048: Count=1
+N=2560: Count=1
+
+BLOCK_X=8, BLOCK_Y=32, TILE_SIZE=64:
+N=512: Count=1
+
+BLOCK_X=8, BLOCK_Y=32, TILE_SIZE=256:
+N=1536: Count=1
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=64:
+N=512: Count=15
+N=1024: Count=10
+N=1536: Count=11
+N=2048: Count=15
+N=2560: Count=15
+N=3072: Count=12
+N=3584: Count=13
+N=4096: Count=11
+N=4608: Count=14
+N=5120: Count=13
+N=5632: Count=12
+N=6144: Count=14
+N=6656: Count=9
+N=7168: Count=7
+N=7680: Count=9
+N=8192: Count=10
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=128:
+N=1536: Count=8
+N=3584: Count=6
+N=4096: Count=4
+N=4608: Count=5
+N=5120: Count=10
+N=5632: Count=7
+N=7168: Count=2
+N=2560: Count=10
+N=6144: Count=4
+N=6656: Count=2
+N=7680: Count=2
+N=8192: Count=2
+N=2048: Count=11
+N=3072: Count=6
+N=512: Count=3
+N=1024: Count=6
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=192:
+N=6144: Count=4
+N=6656: Count=3
+N=7168: Count=3
+N=7680: Count=1
+N=8192: Count=1
+N=4608: Count=5
+N=5120: Count=3
+N=5632: Count=3
+N=3584: Count=7
+N=4096: Count=3
+N=3072: Count=7
+N=2560: Count=5
+N=2048: Count=8
+N=1536: Count=5
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=256:
+N=4608: Count=5
+N=5120: Count=4
+N=5632: Count=5
+N=6144: Count=3
+N=6656: Count=3
+N=7168: Count=1
+N=8192: Count=1
+N=4096: Count=4
+N=3584: Count=5
+N=2560: Count=9
+N=3072: Count=7
+N=2048: Count=7
+N=1536: Count=5
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=320:
+N=4096: Count=5
+N=4608: Count=5
+N=5120: Count=4
+N=5632: Count=4
+N=6144: Count=2
+N=6656: Count=2
+N=7168: Count=1
+N=8192: Count=1
+N=3584: Count=4
+N=3072: Count=5
+N=2560: Count=8
+N=2048: Count=6
+N=1536: Count=2
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=384:
+N=4608: Count=6
+N=5120: Count=5
+N=5632: Count=4
+N=6656: Count=2
+N=7168: Count=1
+N=7680: Count=1
+N=8192: Count=1
+N=4096: Count=5
+N=6144: Count=2
+N=3072: Count=7
+N=3584: Count=3
+N=2560: Count=5
+N=2048: Count=3
+N=1536: Count=1
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=448:
+N=4096: Count=6
+N=4608: Count=6
+N=5120: Count=4
+N=5632: Count=4
+N=6144: Count=2
+N=6656: Count=2
+N=7680: Count=1
+N=8192: Count=1
+N=3584: Count=6
+N=3072: Count=8
+N=2560: Count=6
+N=2048: Count=1
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=512:
+N=5120: Count=4
+N=5632: Count=3
+N=6144: Count=2
+N=6656: Count=2
+N=7168: Count=1
+N=8192: Count=1
+N=3584: Count=6
+N=4608: Count=5
+N=4096: Count=5
+N=3072: Count=6
+N=2560: Count=4
+N=2048: Count=1
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=576:
+N=4608: Count=5
+N=5120: Count=4
+N=6144: Count=2
+N=8192: Count=1
+N=5632: Count=2
+N=6656: Count=1
+N=3584: Count=5
+N=4096: Count=4
+N=3072: Count=3
+N=2560: Count=1
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=640:
+N=4608: Count=6
+N=5120: Count=4
+N=5632: Count=3
+N=6144: Count=2
+N=8192: Count=1
+N=4096: Count=4
+N=6656: Count=1
+N=3584: Count=4
+N=2560: Count=2
+N=3072: Count=1
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=704:
+N=4608: Count=5
+N=5120: Count=5
+N=5632: Count=4
+N=6144: Count=2
+N=6656: Count=2
+N=3584: Count=3
+N=4096: Count=3
+N=3072: Count=1
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=768:
+N=4608: Count=4
+N=5120: Count=2
+N=6144: Count=3
+N=4096: Count=3
+N=5632: Count=3
+N=3584: Count=1
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=832:
+N=4608: Count=3
+N=5120: Count=2
+N=5632: Count=3
+N=6144: Count=2
+N=6656: Count=1
+N=4096: Count=1
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=896:
+N=5120: Count=2
+N=6144: Count=1
+N=5632: Count=1
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=960:
+N=5632: Count=1
+N=6144: Count=1
+
+BLOCK_X=16, BLOCK_Y=8, TILE_SIZE=1024:
+N=5632: Count=1
+N=6144: Count=1
+
+BLOCK_X=16, BLOCK_Y=16, TILE_SIZE=64:
+N=512: Count=12
+N=1024: Count=10
+N=1536: Count=10
+N=2048: Count=11
+N=2560: Count=14
+N=3072: Count=8
+N=3584: Count=12
+N=4096: Count=4
+N=4608: Count=9
+N=5120: Count=12
+N=7168: Count=4
+N=6144: Count=4
+N=6656: Count=2
+N=8192: Count=2
+N=5632: Count=9
+
+BLOCK_X=16, BLOCK_Y=16, TILE_SIZE=128:
+N=3072: Count=4
+N=4608: Count=1
+N=5632: Count=1
+N=2560: Count=5
+N=1536: Count=6
+N=4096: Count=1
+N=2048: Count=2
+N=1024: Count=1
+
+BLOCK_X=16, BLOCK_Y=16, TILE_SIZE=192:
+N=3584: Count=1
+N=4608: Count=1
+N=5120: Count=1
+N=6144: Count=1
+N=2560: Count=5
+N=2048: Count=8
+N=3072: Count=3
+N=1536: Count=4
+
+BLOCK_X=16, BLOCK_Y=16, TILE_SIZE=256:
+N=2560: Count=8
+N=3072: Count=4
+N=3584: Count=1
+N=4096: Count=1
+N=4608: Count=1
+N=2048: Count=7
+N=1536: Count=3
+
+BLOCK_X=16, BLOCK_Y=16, TILE_SIZE=320:
+N=3072: Count=1
+N=2048: Count=3
+N=2560: Count=5
+N=1536: Count=3
+
+BLOCK_X=16, BLOCK_Y=16, TILE_SIZE=384:
+N=2560: Count=2
+N=3072: Count=2
+N=2048: Count=4
+N=1536: Count=2
+
+BLOCK_X=16, BLOCK_Y=16, TILE_SIZE=448:
+N=2048: Count=3
+N=2560: Count=1
+N=3072: Count=2
+
+BLOCK_X=16, BLOCK_Y=16, TILE_SIZE=512:
+N=2048: Count=1
+N=3072: Count=1
+
+BLOCK_X=16, BLOCK_Y=32, TILE_SIZE=64:
+N=1024: Count=2
+N=3072: Count=2
+N=4608: Count=2
+N=5120: Count=2
+N=5632: Count=1
+N=512: Count=5
+N=1536: Count=6
+N=2560: Count=4
+N=3584: Count=3
+N=4096: Count=1
+N=2048: Count=8
+
+BLOCK_X=16, BLOCK_Y=32, TILE_SIZE=128:
+N=2560: Count=2
+N=3072: Count=1
+N=1536: Count=4
+
+BLOCK_X=16, BLOCK_Y=32, TILE_SIZE=192:
+N=1536: Count=4
+
+BLOCK_X=16, BLOCK_Y=32, TILE_SIZE=256:
+N=1536: Count=1
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=64:
+N=512: Count=10
+N=2048: Count=14
+N=2560: Count=11
+N=3072: Count=14
+N=3584: Count=13
+N=4096: Count=14
+N=5120: Count=12
+N=5632: Count=13
+N=6656: Count=13
+N=1024: Count=6
+N=1536: Count=11
+N=4608: Count=13
+N=6144: Count=11
+N=7680: Count=12
+N=8192: Count=13
+N=7168: Count=12
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=128:
+N=6144: Count=11
+N=6656: Count=13
+N=7168: Count=13
+N=8192: Count=14
+N=3072: Count=10
+N=4608: Count=12
+N=7680: Count=11
+N=3584: Count=10
+N=4096: Count=10
+N=5120: Count=12
+N=5632: Count=9
+N=2048: Count=7
+N=2560: Count=11
+N=1536: Count=7
+N=1024: Count=4
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=192:
+N=5632: Count=12
+N=6144: Count=11
+N=6656: Count=9
+N=7168: Count=11
+N=7680: Count=10
+N=8192: Count=11
+N=4608: Count=12
+N=3584: Count=10
+N=4096: Count=10
+N=3072: Count=9
+N=5120: Count=10
+N=2048: Count=7
+N=2560: Count=9
+N=1536: Count=6
+N=1024: Count=1
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=256:
+N=4608: Count=12
+N=5632: Count=10
+N=6144: Count=9
+N=6656: Count=9
+N=7680: Count=10
+N=8192: Count=9
+N=4096: Count=10
+N=5120: Count=11
+N=3584: Count=9
+N=3072: Count=9
+N=7168: Count=5
+N=2048: Count=8
+N=2560: Count=7
+N=1536: Count=5
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=320:
+N=4608: Count=12
+N=5120: Count=12
+N=5632: Count=9
+N=6144: Count=9
+N=6656: Count=6
+N=7168: Count=5
+N=8192: Count=9
+N=3584: Count=6
+N=3072: Count=10
+N=7680: Count=6
+N=2560: Count=8
+N=4096: Count=8
+N=2048: Count=4
+N=1536: Count=3
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=384:
+N=4608: Count=9
+N=5120: Count=11
+N=5632: Count=8
+N=6144: Count=8
+N=6656: Count=7
+N=7680: Count=6
+N=8192: Count=6
+N=3584: Count=6
+N=3072: Count=7
+N=4096: Count=8
+N=2560: Count=7
+N=7168: Count=5
+N=2048: Count=5
+N=1536: Count=3
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=448:
+N=3584: Count=8
+N=4608: Count=9
+N=5120: Count=9
+N=5632: Count=6
+N=6656: Count=5
+N=7168: Count=3
+N=7680: Count=7
+N=8192: Count=8
+N=3072: Count=8
+N=4096: Count=6
+N=6144: Count=5
+N=2560: Count=6
+N=2048: Count=4
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=512:
+N=3584: Count=8
+N=4096: Count=6
+N=4608: Count=8
+N=5120: Count=9
+N=5632: Count=6
+N=7168: Count=5
+N=8192: Count=4
+N=6144: Count=5
+N=3072: Count=5
+N=2560: Count=4
+N=6656: Count=3
+N=7680: Count=2
+N=2048: Count=1
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=576:
+N=3584: Count=7
+N=4608: Count=7
+N=5120: Count=8
+N=6656: Count=5
+N=7168: Count=2
+N=7680: Count=3
+N=8192: Count=3
+N=3072: Count=6
+N=4096: Count=7
+N=5632: Count=5
+N=6144: Count=5
+N=2560: Count=3
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=640:
+N=3584: Count=6
+N=4096: Count=6
+N=4608: Count=5
+N=5120: Count=7
+N=5632: Count=5
+N=6144: Count=6
+N=6656: Count=5
+N=7168: Count=1
+N=8192: Count=4
+N=3072: Count=3
+N=2560: Count=4
+N=7680: Count=2
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=704:
+N=4608: Count=6
+N=5632: Count=5
+N=6144: Count=4
+N=6656: Count=6
+N=7168: Count=1
+N=7680: Count=1
+N=8192: Count=2
+N=3584: Count=4
+N=4096: Count=4
+N=5120: Count=5
+N=3072: Count=4
+N=2560: Count=2
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=768:
+N=3584: Count=4
+N=4096: Count=5
+N=5120: Count=5
+N=5632: Count=4
+N=6144: Count=4
+N=7168: Count=1
+N=4608: Count=4
+N=6656: Count=4
+N=3072: Count=3
+N=2560: Count=1
+N=8192: Count=1
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=832:
+N=4608: Count=4
+N=5120: Count=4
+N=5632: Count=4
+N=6144: Count=2
+N=6656: Count=3
+N=7168: Count=1
+N=7680: Count=1
+N=8192: Count=1
+N=3584: Count=3
+N=4096: Count=2
+N=3072: Count=1
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=896:
+N=4096: Count=3
+N=4608: Count=3
+N=5120: Count=3
+N=5632: Count=3
+N=6144: Count=3
+N=7168: Count=1
+N=7680: Count=1
+N=8192: Count=1
+N=6656: Count=2
+N=3072: Count=1
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=960:
+N=4096: Count=2
+N=4608: Count=2
+N=5120: Count=2
+N=5632: Count=2
+N=7168: Count=1
+N=6656: Count=1
+
+BLOCK_X=32, BLOCK_Y=8, TILE_SIZE=1024:
+N=4096: Count=1
+N=4608: Count=1
+N=5632: Count=1
+N=6144: Count=1
+N=6656: Count=1
+N=7680: Count=1
+N=8192: Count=1
+
+BLOCK_X=32, BLOCK_Y=16, TILE_SIZE=64:
+N=6656: Count=9
+N=7168: Count=12
+N=8192: Count=12
+N=6144: Count=8
+N=7680: Count=13
+N=3072: Count=8
+N=4096: Count=11
+N=4608: Count=13
+N=5120: Count=12
+N=5632: Count=8
+N=2560: Count=10
+N=3584: Count=6
+N=512: Count=1
+N=1536: Count=5
+N=2048: Count=9
+
+BLOCK_X=32, BLOCK_Y=16, TILE_SIZE=128:
+N=5632: Count=11
+N=6144: Count=9
+N=6656: Count=10
+N=4608: Count=10
+N=7680: Count=10
+N=8192: Count=11
+N=2560: Count=9
+N=5120: Count=9
+N=7168: Count=7
+N=3072: Count=8
+N=3584: Count=7
+N=4096: Count=8
+N=2048: Count=4
+N=1536: Count=3
+
+BLOCK_X=32, BLOCK_Y=16, TILE_SIZE=192:
+N=5120: Count=8
+N=5632: Count=7
+N=6144: Count=10
+N=8192: Count=7
+N=2560: Count=7
+N=7680: Count=7
+N=3072: Count=7
+N=4608: Count=8
+N=6656: Count=4
+N=2048: Count=3
+N=4096: Count=6
+N=7168: Count=4
+N=1536: Count=6
+N=3584: Count=1
+
+BLOCK_X=32, BLOCK_Y=16, TILE_SIZE=256:
+N=3072: Count=8
+N=4608: Count=6
+N=5120: Count=8
+N=5632: Count=7
+N=6144: Count=7
+N=6656: Count=9
+N=8192: Count=6
+N=2560: Count=7
+N=7680: Count=6
+N=7168: Count=4
+N=1536: Count=2
+N=2048: Count=2
+N=4096: Count=3
+
+BLOCK_X=32, BLOCK_Y=16, TILE_SIZE=320:
+N=2560: Count=7
+N=3072: Count=6
+N=4608: Count=2
+N=5632: Count=4
+N=6144: Count=6
+N=6656: Count=4
+N=8192: Count=5
+N=5120: Count=3
+N=7168: Count=3
+N=7680: Count=4
+N=4096: Count=2
+
+BLOCK_X=32, BLOCK_Y=16, TILE_SIZE=384:
+N=2560: Count=5
+N=3072: Count=5
+N=4608: Count=2
+N=5120: Count=3
+N=5632: Count=3
+N=7680: Count=3
+N=8192: Count=3
+N=2048: Count=2
+N=6144: Count=3
+N=6656: Count=3
+
+BLOCK_X=32, BLOCK_Y=16, TILE_SIZE=448:
+N=3072: Count=2
+N=4608: Count=1
+N=5120: Count=2
+N=5632: Count=1
+N=7680: Count=1
+N=8192: Count=2
+N=2560: Count=1
+N=6656: Count=2
+N=2048: Count=1
+N=6144: Count=1
+
+BLOCK_X=32, BLOCK_Y=16, TILE_SIZE=512:
+N=2560: Count=1
+N=3072: Count=1
+N=5632: Count=1
+N=6144: Count=1
+N=6656: Count=1
+N=7680: Count=1
+N=8192: Count=1
+
+BLOCK_X=32, BLOCK_Y=32, TILE_SIZE=64:
+N=5632: Count=11
+N=6144: Count=7
+N=6656: Count=7
+N=7680: Count=8
+N=8192: Count=7
+N=4608: Count=9
+N=5120: Count=10
+N=2560: Count=7
+N=3072: Count=7
+N=4096: Count=6
+N=3584: Count=5
+N=7168: Count=6
+N=2048: Count=3
+N=1024: Count=1
+N=1536: Count=2
+
+BLOCK_X=32, BLOCK_Y=32, TILE_SIZE=128:
+N=3072: Count=7
+N=4608: Count=8
+N=5120: Count=6
+N=5632: Count=6
+N=6144: Count=5
+N=6656: Count=7
+N=7680: Count=7
+N=8192: Count=6
+N=4096: Count=5
+N=7168: Count=5
+N=2560: Count=5
+N=1536: Count=4
+
+BLOCK_X=32, BLOCK_Y=32, TILE_SIZE=192:
+N=2048: Count=1
+N=2560: Count=2
+N=3072: Count=2
+N=5120: Count=3
+N=5632: Count=3
+N=6144: Count=3
+N=6656: Count=2
+N=8192: Count=4
+N=4608: Count=4
+N=1536: Count=2
+N=4096: Count=2
+N=7168: Count=2
+N=7680: Count=1
+
+BLOCK_X=32, BLOCK_Y=32, TILE_SIZE=256:
+N=2048: Count=1
+N=2560: Count=1
+N=3072: Count=1
+N=4608: Count=1
+N=5632: Count=1
+N=6144: Count=1
+N=6656: Count=1
+N=7680: Count=1
+N=8192: Count=1
+
+Results for  reduction1 :
+BLOCK_X=32: Count=213
+BLOCK_X=64: Count=339
+BLOCK_X=128: Count=363
+BLOCK_X=256: Count=394
+BLOCK_X=512: Count=358
+BLOCK_X=1024: Count=207
+
+TILE_SIZE=32: Count=892
+TILE_SIZE=64: Count=633
+TILE_SIZE=128: Count=349
+
+BLOCK_X=32, TILE_SIZE=32:
+Min shape: (512, 512)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, TILE_SIZE=64:
+Min shape: (1536, 512)
+Max shape: (8192, 8192)
+
+BLOCK_X=64, TILE_SIZE=32:
+Min shape: (512, 512)
+Max shape: (8192, 8192)
+
+BLOCK_X=64, TILE_SIZE=64:
+Min shape: (1024, 512)
+Max shape: (8192, 8192)
+
+BLOCK_X=64, TILE_SIZE=128:
+Min shape: (1536, 1536)
+Max shape: (8192, 8192)
+
+BLOCK_X=128, TILE_SIZE=32:
+Min shape: (512, 512)
+Max shape: (8192, 8192)
+
+BLOCK_X=128, TILE_SIZE=64:
+Min shape: (1024, 512)
+Max shape: (8192, 8192)
+
+BLOCK_X=128, TILE_SIZE=128:
+Min shape: (1536, 1536)
+Max shape: (8192, 8192)
+
+BLOCK_X=256, TILE_SIZE=32:
+Min shape: (512, 512)
+Max shape: (8192, 8192)
+
+BLOCK_X=256, TILE_SIZE=64:
+Min shape: (1024, 512)
+Max shape: (8192, 8192)
+
+BLOCK_X=256, TILE_SIZE=128:
+Min shape: (1536, 1536)
+Max shape: (8192, 8192)
+
+BLOCK_X=512, TILE_SIZE=32:
+Min shape: (512, 512)
+Max shape: (8192, 8192)
+
+BLOCK_X=512, TILE_SIZE=64:
+Min shape: (1024, 512)
+Max shape: (8192, 8192)
+
+BLOCK_X=512, TILE_SIZE=128:
+Min shape: (1536, 1536)
+Max shape: (8192, 8192)
+
+BLOCK_X=1024, TILE_SIZE=32:
+Min shape: (1024, 1024)
+Max shape: (8192, 8192)
+
+BLOCK_X=1024, TILE_SIZE=64:
+Min shape: (1536, 1536)
+Max shape: (8192, 8192)
+
+BLOCK_X=32, TILE_SIZE=32:
+M=512: Count=4
+M=2560: Count=9
+M=3072: Count=10
+M=3584: Count=9
+M=4096: Count=8
+M=4608: Count=7
+M=5120: Count=10
+M=5632: Count=5
+M=6144: Count=10
+M=6656: Count=8
+M=7168: Count=7
+M=7680: Count=7
+M=8192: Count=13
+M=2048: Count=7
+M=1536: Count=4
+
+BLOCK_X=32, TILE_SIZE=64:
+M=6144: Count=7
+M=7680: Count=12
+M=8192: Count=8
+M=5632: Count=8
+M=6656: Count=6
+M=5120: Count=9
+M=7168: Count=8
+M=4608: Count=6
+M=3072: Count=7
+M=3584: Count=5
+M=2560: Count=6
+M=4096: Count=8
+M=2048: Count=3
+M=1536: Count=2
+
+BLOCK_X=64, TILE_SIZE=32:
+M=512: Count=13
+M=1024: Count=10
+M=1536: Count=8
+M=2048: Count=11
+M=2560: Count=12
+M=3072: Count=14
+M=3584: Count=9
+M=4096: Count=12
+M=5120: Count=7
+M=6656: Count=11
+M=5632: Count=8
+M=6144: Count=10
+M=7168: Count=11
+M=7680: Count=11
+M=8192: Count=10
+M=4608: Count=8
+
+BLOCK_X=64, TILE_SIZE=64:
+M=6656: Count=10
+M=7168: Count=8
+M=8192: Count=12
+M=3584: Count=7
+M=2048: Count=3
+M=2560: Count=7
+M=3072: Count=4
+M=6144: Count=8
+M=7680: Count=10
+M=4608: Count=5
+M=5120: Count=5
+M=5632: Count=8
+M=1536: Count=4
+M=4096: Count=5
+M=1024: Count=2
+
+BLOCK_X=64, TILE_SIZE=128:
+M=7680: Count=7
+M=8192: Count=7
+M=5120: Count=6
+M=5632: Count=5
+M=6144: Count=5
+M=6656: Count=6
+M=7168: Count=6
+M=3584: Count=6
+M=4096: Count=5
+M=4608: Count=5
+M=3072: Count=6
+M=2560: Count=6
+M=2048: Count=3
+M=1536: Count=3
+
+BLOCK_X=128, TILE_SIZE=32:
+M=512: Count=13
+M=1024: Count=11
+M=1536: Count=11
+M=2048: Count=7
+M=2560: Count=7
+M=3072: Count=13
+M=4096: Count=12
+M=5632: Count=8
+M=6144: Count=11
+M=3584: Count=10
+M=4608: Count=8
+M=5120: Count=8
+M=6656: Count=8
+M=7168: Count=8
+M=8192: Count=11
+M=7680: Count=9
+
+BLOCK_X=128, TILE_SIZE=64:
+M=4096: Count=9
+M=6144: Count=11
+M=6656: Count=7
+M=7168: Count=7
+M=7680: Count=10
+M=8192: Count=10
+M=3584: Count=7
+M=4608: Count=11
+M=5632: Count=9
+M=2560: Count=7
+M=3072: Count=10
+M=5120: Count=8
+M=1536: Count=7
+M=2048: Count=4
+M=1024: Count=4
+
+BLOCK_X=128, TILE_SIZE=128:
+M=7680: Count=10
+M=8192: Count=9
+M=5120: Count=7
+M=6656: Count=5
+M=4608: Count=7
+M=5632: Count=7
+M=6144: Count=6
+M=7168: Count=7
+M=3584: Count=6
+M=4096: Count=6
+M=3072: Count=7
+M=2048: Count=4
+M=2560: Count=4
+M=1536: Count=2
+
+BLOCK_X=256, TILE_SIZE=32:
+M=512: Count=12
+M=1024: Count=10
+M=1536: Count=8
+M=2560: Count=12
+M=3072: Count=12
+M=4608: Count=13
+M=6144: Count=13
+M=3584: Count=11
+M=5120: Count=12
+M=5632: Count=12
+M=6656: Count=10
+M=7168: Count=9
+M=8192: Count=13
+M=4096: Count=10
+M=7680: Count=7
+M=2048: Count=7
+
+BLOCK_X=256, TILE_SIZE=64:
+M=5120: Count=10
+M=5632: Count=11
+M=6144: Count=7
+M=6656: Count=11
+M=8192: Count=12
+M=3072: Count=10
+M=4096: Count=9
+M=4608: Count=10
+M=7680: Count=12
+M=7168: Count=7
+M=3584: Count=9
+M=2048: Count=6
+M=1536: Count=6
+M=2560: Count=4
+M=1024: Count=3
+
+BLOCK_X=256, TILE_SIZE=128:
+M=7168: Count=7
+M=7680: Count=10
+M=8192: Count=9
+M=5120: Count=7
+M=5632: Count=5
+M=6144: Count=8
+M=6656: Count=8
+M=4096: Count=8
+M=3584: Count=8
+M=4608: Count=8
+M=3072: Count=8
+M=2048: Count=4
+M=2560: Count=5
+M=1536: Count=1
+
+BLOCK_X=512, TILE_SIZE=32:
+M=1536: Count=10
+M=2048: Count=12
+M=3072: Count=12
+M=4096: Count=14
+M=4608: Count=14
+M=5120: Count=8
+M=5632: Count=12
+M=6144: Count=11
+M=512: Count=7
+M=7168: Count=9
+M=7680: Count=12
+M=6656: Count=8
+M=8192: Count=8
+M=1024: Count=9
+M=2560: Count=8
+M=3584: Count=9
+
+BLOCK_X=512, TILE_SIZE=64:
+M=5632: Count=10
+M=6144: Count=6
+M=6656: Count=12
+M=8192: Count=9
+M=3072: Count=9
+M=4096: Count=8
+M=4608: Count=7
+M=3584: Count=7
+M=5120: Count=10
+M=2560: Count=5
+M=7168: Count=5
+M=2048: Count=4
+M=7680: Count=6
+M=1024: Count=2
+M=1536: Count=5
+
+BLOCK_X=512, TILE_SIZE=128:
+M=7680: Count=7
+M=8192: Count=9
+M=5120: Count=9
+M=5632: Count=6
+M=6144: Count=7
+M=6656: Count=7
+M=7168: Count=5
+M=4608: Count=5
+M=3584: Count=8
+M=4096: Count=6
+M=3072: Count=7
+M=2560: Count=8
+M=2048: Count=2
+M=1536: Count=4
+
+BLOCK_X=1024, TILE_SIZE=32:
+M=2560: Count=8
+M=5632: Count=10
+M=6144: Count=9
+M=6656: Count=10
+M=7168: Count=10
+M=7680: Count=9
+M=8192: Count=10
+M=3072: Count=8
+M=3584: Count=10
+M=4608: Count=7
+M=5120: Count=8
+M=4096: Count=8
+M=1024: Count=1
+M=2048: Count=7
+M=1536: Count=5
+
+BLOCK_X=1024, TILE_SIZE=64:
+M=6656: Count=7
+M=4608: Count=11
+M=5632: Count=7
+M=6144: Count=9
+M=3584: Count=3
+M=4096: Count=5
+M=7680: Count=8
+M=8192: Count=7
+M=3072: Count=6
+M=5120: Count=8
+M=2560: Count=5
+M=7168: Count=7
+M=2048: Count=1
+M=1536: Count=3
+
+BLOCK_X=32, TILE_SIZE=32:
+N=512: Count=13
+N=1024: Count=2
+N=1536: Count=6
+N=2048: Count=6
+N=2560: Count=7
+N=3072: Count=8
+N=3584: Count=6
+N=4096: Count=10
+N=4608: Count=3
+N=5120: Count=9
+N=5632: Count=7
+N=6144: Count=8
+N=6656: Count=10
+N=7168: Count=7
+N=7680: Count=7
+N=8192: Count=9
+
+BLOCK_X=32, TILE_SIZE=64:
+N=512: Count=1
+N=1536: Count=2
+N=2048: Count=4
+N=2560: Count=3
+N=3072: Count=6
+N=3584: Count=7
+N=4096: Count=6
+N=4608: Count=8
+N=5120: Count=9
+N=5632: Count=8
+N=6144: Count=8
+N=6656: Count=10
+N=7168: Count=7
+N=7680: Count=9
+N=8192: Count=7
+
+BLOCK_X=64, TILE_SIZE=32:
+N=512: Count=10
+N=1024: Count=10
+N=1536: Count=11
+N=2048: Count=12
+N=2560: Count=13
+N=3072: Count=10
+N=3584: Count=12
+N=4096: Count=8
+N=4608: Count=11
+N=5120: Count=13
+N=5632: Count=11
+N=6144: Count=11
+N=6656: Count=8
+N=7168: Count=11
+N=7680: Count=7
+N=8192: Count=7
+
+BLOCK_X=64, TILE_SIZE=64:
+N=512: Count=3
+N=1024: Count=1
+N=1536: Count=7
+N=2048: Count=5
+N=3072: Count=8
+N=3584: Count=4
+N=4096: Count=9
+N=4608: Count=8
+N=5120: Count=8
+N=5632: Count=9
+N=6144: Count=5
+N=6656: Count=5
+N=7168: Count=7
+N=7680: Count=9
+N=8192: Count=10
+
+BLOCK_X=64, TILE_SIZE=128:
+N=1536: Count=2
+N=2048: Count=6
+N=3072: Count=7
+N=3584: Count=4
+N=4096: Count=6
+N=4608: Count=8
+N=5120: Count=6
+N=5632: Count=6
+N=6144: Count=7
+N=6656: Count=9
+N=7168: Count=5
+N=7680: Count=4
+N=8192: Count=6
+
+BLOCK_X=128, TILE_SIZE=32:
+N=512: Count=9
+N=1024: Count=13
+N=1536: Count=12
+N=2048: Count=11
+N=2560: Count=11
+N=3072: Count=7
+N=3584: Count=9
+N=4096: Count=10
+N=4608: Count=12
+N=5120: Count=9
+N=5632: Count=7
+N=6144: Count=7
+N=6656: Count=11
+N=7168: Count=10
+N=7680: Count=9
+N=8192: Count=8
+
+BLOCK_X=128, TILE_SIZE=64:
+N=512: Count=6
+N=1024: Count=5
+N=1536: Count=8
+N=2048: Count=5
+N=2560: Count=2
+N=3072: Count=7
+N=3584: Count=8
+N=4096: Count=6
+N=4608: Count=6
+N=5120: Count=11
+N=5632: Count=11
+N=6144: Count=11
+N=6656: Count=8
+N=7168: Count=9
+N=7680: Count=11
+N=8192: Count=7
+
+BLOCK_X=128, TILE_SIZE=128:
+N=1536: Count=2
+N=2048: Count=4
+N=2560: Count=5
+N=3072: Count=6
+N=3584: Count=8
+N=4096: Count=4
+N=4608: Count=5
+N=5120: Count=8
+N=5632: Count=7
+N=6144: Count=8
+N=6656: Count=8
+N=7168: Count=6
+N=7680: Count=9
+N=8192: Count=7
+
+BLOCK_X=256, TILE_SIZE=32:
+N=512: Count=7
+N=1024: Count=12
+N=1536: Count=9
+N=2048: Count=13
+N=2560: Count=11
+N=3072: Count=11
+N=3584: Count=9
+N=4096: Count=13
+N=4608: Count=13
+N=5120: Count=11
+N=5632: Count=9
+N=6144: Count=12
+N=6656: Count=11
+N=7168: Count=12
+N=7680: Count=8
+N=8192: Count=10
+
+BLOCK_X=256, TILE_SIZE=64:
+N=512: Count=4
+N=1024: Count=4
+N=1536: Count=7
+N=2048: Count=3
+N=2560: Count=4
+N=3072: Count=6
+N=3584: Count=8
+N=4096: Count=7
+N=4608: Count=10
+N=5120: Count=10
+N=5632: Count=9
+N=6144: Count=10
+N=6656: Count=13
+N=7168: Count=10
+N=7680: Count=11
+N=8192: Count=11
+
+BLOCK_X=256, TILE_SIZE=128:
+N=1536: Count=3
+N=2048: Count=7
+N=2560: Count=7
+N=3072: Count=6
+N=3584: Count=8
+N=4096: Count=7
+N=4608: Count=10
+N=5120: Count=5
+N=5632: Count=8
+N=6144: Count=8
+N=6656: Count=9
+N=7168: Count=7
+N=7680: Count=7
+N=8192: Count=4
+
+BLOCK_X=512, TILE_SIZE=32:
+N=512: Count=8
+N=1024: Count=7
+N=1536: Count=12
+N=2048: Count=10
+N=2560: Count=12
+N=3072: Count=10
+N=3584: Count=7
+N=4096: Count=11
+N=4608: Count=9
+N=5120: Count=11
+N=5632: Count=10
+N=6144: Count=12
+N=6656: Count=11
+N=7168: Count=12
+N=7680: Count=12
+N=8192: Count=9
+
+BLOCK_X=512, TILE_SIZE=64:
+N=512: Count=3
+N=1024: Count=1
+N=1536: Count=6
+N=2048: Count=3
+N=2560: Count=2
+N=3072: Count=5
+N=3584: Count=7
+N=4096: Count=8
+N=4608: Count=4
+N=5120: Count=8
+N=5632: Count=10
+N=6144: Count=10
+N=6656: Count=8
+N=7168: Count=10
+N=7680: Count=10
+N=8192: Count=10
+
+BLOCK_X=512, TILE_SIZE=128:
+N=1536: Count=2
+N=2048: Count=7
+N=2560: Count=7
+N=3072: Count=4
+N=3584: Count=7
+N=4096: Count=4
+N=4608: Count=9
+N=5120: Count=6
+N=5632: Count=6
+N=6144: Count=7
+N=6656: Count=9
+N=7168: Count=7
+N=7680: Count=8
+N=8192: Count=7
+
+BLOCK_X=1024, TILE_SIZE=32:
+N=1024: Count=3
+N=1536: Count=4
+N=2048: Count=7
+N=2560: Count=9
+N=3072: Count=7
+N=3584: Count=8
+N=4096: Count=11
+N=4608: Count=9
+N=5120: Count=7
+N=5632: Count=6
+N=6144: Count=9
+N=6656: Count=11
+N=7168: Count=9
+N=7680: Count=12
+N=8192: Count=8
+
+BLOCK_X=1024, TILE_SIZE=64:
+N=1536: Count=1
+N=2048: Count=3
+N=2560: Count=1
+N=3072: Count=6
+N=3584: Count=7
+N=4096: Count=10
+N=4608: Count=8
+N=5120: Count=8
+N=5632: Count=7
+N=6144: Count=9
+N=6656: Count=6
+N=7168: Count=7
+N=7680: Count=5
+N=8192: Count=9
+
