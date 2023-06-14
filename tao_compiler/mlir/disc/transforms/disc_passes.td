@@ -146,6 +146,8 @@ def DiscFusionPass : Pass<"disc-fusion", "mlir::func::FuncOp"> {
            /*default=*/"true", "whether gpu is available.">,
     Option<"fusion_strategy_", "fusion-strategy", "std::string",
            /*default=*/"\"base\"", "Name of the fusion strategy.">,
+    Option<"mlir_compute_intensive_codegen_", "mlir-compute-intensive-codegen", "bool",
+           /*default=*/"false", "whether using MLIR based compute intensive codegen.">,
   ];
 }
 
@@ -531,6 +533,16 @@ def DiscConvertFakeQuantOpPass : Pass<"disc-convert-fake-quant-op", "mlir::func:
 def DiscLowerQuantizeAndDequantizePass : Pass<"disc-lower-quantize-and-dequantize", "mlir::func::FuncOp"> {
   let summary = "Lower quantize and dequantize op to a bound of basic elementwise ops.";
   let constructor = "createDiscLowerQuantizeAndDequantizePass()";
+  let dependentDialects = [
+      "disc_shape::DISCShapeDialect",
+      "shape::ShapeDialect",
+      "mhlo::MhloDialect",
+  ];
+}
+
+def DiscTranformWeightDataLayoutForWeightOnlyQuantPass : Pass<"disc-transform-weight-data-layout-for-weight-only-quant", "mlir::func::FuncOp"> {
+  let summary = "Transform weight data layout for faster-transformer's weight only gemm kernel";
+  let constructor = "createDiscTranformWeightDataLayoutForWeightOnlyQuantPass()";
   let dependentDialects = [
       "disc_shape::DISCShapeDialect",
       "shape::ShapeDialect",

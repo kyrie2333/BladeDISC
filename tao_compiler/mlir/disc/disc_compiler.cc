@@ -248,6 +248,9 @@ LogicalResult LowerHLOToLLVM(ModuleOp m, const DISCLoweringOptions& options) {
   pm.addNestedPass<FuncOp>(createCanonicalizerPass());
   pm.addNestedPass<FuncOp>(createCSEPass());
   pm.addNestedPass<FuncOp>(createCanonicalizerPass());
+  pm.addNestedPass<FuncOp>(
+      disc_ral::createDiscTranformWeightDataLayoutForWeightOnlyQuantPass());
+  pm.addNestedPass<FuncOp>(createCanonicalizerPass());
 
   // quantization related passes.
   pm.addNestedPass<FuncOp>(disc_ral::createDiscCustomCallRewriterPass());
@@ -479,8 +482,12 @@ LogicalResult LowerHLOToLLVM(ModuleOp m, const DISCLoweringOptions& options) {
   }
   // Use stitch centric fusion pipeline when enabled.
   std::string fusion_strategy = enable_stitch ? "stitch" : "base";
-  pm.addNestedPass<FuncOp>(
-      disc_ral::createDiscFusionPass(gpu_enabled, fusion_strategy));
+  // TODO: support cc_major < 8 (e.g., T4, V100).
+  bool mlir_compute_intensive_codegen =
+      useTransformSchedule() &&
+      (!gpu_enabled || (gpu_enabled && gpu_options.cc_major >= 8));
+  pm.addNestedPass<FuncOp>(disc_ral::createDiscFusionPass(
+      gpu_enabled, fusion_strategy, mlir_compute_intensive_codegen));
   if (enable_comp_intens_fusion && gpu_enabled) {
     pm.addPass(disc_ral::createDiscCompIntensFusionToFuncPass());
   }
@@ -638,12 +645,15 @@ LogicalResult LowerHLOToLLVM(ModuleOp m, const DISCLoweringOptions& options) {
     kernelPm.addNestedPass<FuncOp>(createCSEPass());
     kernelPm.addNestedPass<FuncOp>(createCanonicalizerPass());
     kernelPm.addPass(createStripDebugInfoPass());
+    int64_t codegen_bitwidth = 32;
+    tensorflow::ReadInt64FromEnvVar("DISC_CODEGEN_INDEX_BITWIDTH",
+                                    codegen_bitwidth, &codegen_bitwidth);
 #if TENSORFLOW_USE_ROCM
     kernelPm.addPass(disc_ral::createDiscLowerGpuOpsToROCDLOpsPass(
-        /*kDeriveIndexBitwidthFromDataLayout*/ 32));
+        /*kDeriveIndexBitwidthFromDataLayout*/ codegen_bitwidth));
 #elif GOOGLE_CUDA
     kernelPm.addPass(disc_ral::createDiscLowerGpuOpsToNVVMOpsPass(
-        /*kDeriveIndexBitwidthFromDataLayout*/ 32));
+        /*kDeriveIndexBitwidthFromDataLayout*/ codegen_bitwidth));
 #endif
     if (isMemIntensiveOptExperimentalEnabled()) {
       // To eliminate dead argument of GPU LLVM functions. First, it has to
@@ -852,7 +862,7 @@ LogicalResult LowerLLVMToBinary(ModuleOp module,
     return failure();
   }
 
-  auto transformer = mlir::makeOptimizingTransformer(
+  auto transformer = mlir::disc_ral::makeOptimizingTransformer(
       /*optLevel=*/3, /*sizeLevel=*/0, /*targetMachine=*/tm.get());
   if (!transformer) {
     llvm::errs() << "transformer create failed\n";

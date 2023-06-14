@@ -105,7 +105,8 @@ std::unique_ptr<OperationPass<FuncOp>> createParallelLoopTilingPass(
 
 // Fuse lmhlo ops to kLoop/kInput fusion patterns
 std::unique_ptr<OperationPass<FuncOp>> createDiscFusionPass(
-    bool gpu_enabled = true, const std::string& fusion_strategy = "base");
+    bool gpu_enabled = true, const std::string& fusion_strategy = "base",
+    bool mlir_compute_intensive_codegen = false);
 
 // Fuse splat constant to avoid memory access
 std::unique_ptr<OperationPass<FuncOp>> createDiscFuseSplatConstPass();
@@ -274,6 +275,10 @@ std::unique_ptr<OperationPass<func::FuncOp>> createDiscConvertFakeQuantOpPass();
 // Lowers quantize and dequantize ops to a bunch of basic elementwise ops.
 std::unique_ptr<OperationPass<func::FuncOp>>
 createDiscLowerQuantizeAndDequantizePass();
+
+// transform weight data layout for ft's weight-only qgemm.
+std::unique_ptr<OperationPass<func::FuncOp>>
+createDiscTranformWeightDataLayoutForWeightOnlyQuantPass();
 
 // Lowers quantize and dequantize ops to a bunch of basic elementwise ops on
 // gpu.
