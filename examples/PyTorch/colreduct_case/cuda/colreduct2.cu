@@ -61,7 +61,7 @@ void column_reduce_host(float* matrix, float* result, int M, int N) {
 
 // colume reduction for a mtrix, 1D grid and 2D block
 __global__ void column_reduce_trans(float* data_in, float* data_out, int M, int N, int tile_size) {
-  __shared__ float sdata[32][32];
+  __shared__ float sdata[32][8];
 
   int block_x = blockIdx.x % ((N + blockDim.x - 1) / blockDim.x);
   int block_y = blockIdx.x / ((N + blockDim.x - 1) / blockDim.x);
@@ -69,18 +69,21 @@ __global__ void column_reduce_trans(float* data_in, float* data_out, int M, int 
   int col_g = block_x * blockDim.x + threadIdx.x;
 
   // local reduction
-  float accum = 0.0f;
-  for (int i = 0; i < tile_size; i++) {
-    int row_g = i + threadIdx.y * tile_size + block_y * tile_size * blockDim.y;
-    if (row_g < M && col_g < N)
-      accum += data_in[row_g * N + col_g];
-    else
-      accum += 0.0f;
+    float accum = 0.0f;
+  if (col_g < N) {
+    for (int i = 0; i < tile_size; i++) {
+      int row_g = i + threadIdx.y * tile_size + block_y * tile_size * blockDim.y;
+      if (row_g < M && col_g < N)
+        accum += data_in[row_g * N + col_g];
+      else
+        accum += 0.0f;
+    }
+  }else{
+    sdata[threadIdx.x][threadIdx.y] = 0.0f;
   }
-  sdata[threadIdx.x][threadIdx.y] = accum;
+    sdata[threadIdx.x][threadIdx.y] = accum;
   __syncthreads();
 
-  
   for (int stride = blockDim.y / 2; stride > 0; stride >>= 1) {
     if (threadIdx.y < stride) {
       sdata[threadIdx.x][threadIdx.y] +=
@@ -90,7 +93,7 @@ __global__ void column_reduce_trans(float* data_in, float* data_out, int M, int 
   }
 
   // block level reduction
-  if (threadIdx.y == 0) {
+  if (col_g < N && threadIdx.y == 0) {
     atomicAdd(&data_out[col_g], sdata[threadIdx.x][0]);
   }
 }

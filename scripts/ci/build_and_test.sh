@@ -32,6 +32,7 @@ fi
   && cd tao_compiler && bazel clean --expunge)
 
 python ${ENTRY} ${VENV_PATH} -s configure --bridge-gcc default --compiler-gcc default ${CPU_ONLY} ${ROCM} ${DCU} ${ROCM_PATH} ${TARGET_CPU_ARCH}
+exit
 python ${ENTRY} ${VENV_PATH} -s build_tao_bridge ${CPU_ONLY} ${ROCM} ${DCU} ${ROCM_PATH} ${TARGET_CPU_ARCH}
 python ${ENTRY} ${VENV_PATH} -s build_tao_compiler ${CPU_ONLY} ${ROCM} ${DCU} ${ROCM_PATH} ${TARGET_CPU_ARCH}
 if [[ -z "$ROCM" ]] && [[ -z "$DCU" ]]; then

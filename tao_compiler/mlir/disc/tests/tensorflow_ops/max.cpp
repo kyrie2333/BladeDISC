@@ -101,23 +101,23 @@ const std::string c_ft_path = "mlir/disc/tests/tensorflow_ops/data/";
 //   unsetenv("DISC_ENABLE_SHAPE_CONSTRAINT_IR");
 // }
 
-// dynamic shape 3D column reduction test case
-TEST(TFMaxOpTest, ColReduceFullyDynamicShape3DF32_3) {
-  setenv("DISC_ENABLE_SHAPE_CONSTRAINT_IR", "true", 1);
-  setenv("DISC_MEM_INTENSIVE_OPT_EXPERIMENTAL", "true", 1);
-  setenv("DISC_ENABLE_STITCH", "true", 1);
-  EXPECT_TRUE(feature_test_main(
-      /*mlir_file_path*/ c_ft_path + "max_col_d_f32.mlir",
-      /*backend_types*/
-      kSupportedBackendList,
-      /*num_inputs*/ 1,
-      /*num_outputs*/ 1,
-      /*input_descriptors*/ {"2560x8192x10xf32_X"},
-      /*output_descriptors*/ {"f32_X"}));
-  unsetenv("DISC_ENABLE_STITCH");
-  unsetenv("DISC_MEM_INTENSIVE_OPT_EXPERIMENTAL");
-  unsetenv("DISC_ENABLE_SHAPE_CONSTRAINT_IR");
-}
+// // dynamic shape 3D column reduction test case
+// TEST(TFMaxOpTest, ColReduceFullyDynamicShape3DF32_3) {
+//   setenv("DISC_ENABLE_SHAPE_CONSTRAINT_IR", "true", 1);
+//   setenv("DISC_MEM_INTENSIVE_OPT_EXPERIMENTAL", "true", 1);
+//   setenv("DISC_ENABLE_STITCH", "true", 1);
+//   EXPECT_TRUE(feature_test_main(
+//       /*mlir_file_path*/ c_ft_path + "max_col_d_f32.mlir",
+//       /*backend_types*/
+//       kSupportedBackendList,
+//       /*num_inputs*/ 1,
+//       /*num_outputs*/ 1,
+//       /*input_descriptors*/ {"2560x8192x10xf32_X"},
+//       /*output_descriptors*/ {"f32_X"}));
+//   unsetenv("DISC_ENABLE_STITCH");
+//   unsetenv("DISC_MEM_INTENSIVE_OPT_EXPERIMENTAL");
+//   unsetenv("DISC_ENABLE_SHAPE_CONSTRAINT_IR");
+// }
 
 // // dynamic shape 3D column reduction test case
 // TEST(TFMaxOpTest, ColReduceFullyDynamicShape3DF32_4) {

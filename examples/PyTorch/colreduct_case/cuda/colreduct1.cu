@@ -75,10 +75,8 @@ __global__ void column_reduce(float* data_in, float* data_out, int M, int N, int
 
   for (int i = 0; i < tile_size; i++) {
     int row = block_y * tile_size + i;
-    // int row = (blockIdx.x / (N / BLOCK_X)) * TILE_SIZE + i;
     if (row < M) accum += data_in[row * N + col];
   }
-  // __syncthreads();
 
   atomicAdd(&data_out[col], accum);
 }
@@ -137,10 +135,10 @@ int main(int argc, char* argv[]) {
   CHECK(cudaDeviceReset());
 
   // column reduction on host
-  // column_reduce_host(matrix, h_result, M, N);
+  column_reduce_host(matrix, h_result, M, N);
 
-  // // check result
-  // check_result(h_result, result, N);
+  // check result
+  check_result(h_result, result, N);
 
   free(matrix);
   free(result);
