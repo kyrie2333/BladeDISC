@@ -5,11 +5,11 @@ Executing tests from //mlir/disc/tests/tensorflow_ops:max.cpp.test
 [----------] Global test environment set-up.
 [----------] 1 test from TFMaxOpTest
 [ RUN      ] TFMaxOpTest.ColReduceFullyDynamicShape3DF32
-2023-06-25 09:37:01.924559: I ./mlir/disc/tests/mlir_feature_test.h:29] Apply env setting:
-2023-06-25 09:37:01.924605: I ./mlir/disc/tests/mlir_feature_test.h:31] 	DISC_MEM_INTENSIVE_OPT_EXPERIMENTAL = true
-2023-06-25 09:37:01.924609: I ./mlir/disc/tests/mlir_feature_test.h:31] 	DISC_ENABLE_STITCH = true
-2023-06-25 09:37:01.924612: I mlir/disc/tests/mlir_feature_test.cc:271] Testing for CUDA backend
-2023-06-25 09:37:01.924662: I mlir/disc/tests/mlir_feature_test.cc:145] Original TF code: func.func @main(%arg0: tensor<?x?x?xf32>) -> tensor<?x?xf32> attributes {tf.entry_function = {inputs = "{{INPUTS}}", outputs = "{{OUTPUTS}}", input_placements="{{INPUT_PLACEMENTS}}", output_placements="{{OUTPUT_PLACEMENTS}}"}} {
+2023-06-25 03:54:49.186013: I ./mlir/disc/tests/mlir_feature_test.h:29] Apply env setting:
+2023-06-25 03:54:49.186077: I ./mlir/disc/tests/mlir_feature_test.h:31] 	DISC_MEM_INTENSIVE_OPT_EXPERIMENTAL = true
+2023-06-25 03:54:49.186081: I ./mlir/disc/tests/mlir_feature_test.h:31] 	DISC_ENABLE_STITCH = true
+2023-06-25 03:54:49.186084: I mlir/disc/tests/mlir_feature_test.cc:271] Testing for CUDA backend
+2023-06-25 03:54:49.186144: I mlir/disc/tests/mlir_feature_test.cc:145] Original TF code: func.func @main(%arg0: tensor<?x?x?xf32>) -> tensor<?x?xf32> attributes {tf.entry_function = {inputs = "{{INPUTS}}", outputs = "{{OUTPUTS}}", input_placements="{{INPUT_PLACEMENTS}}", output_placements="{{OUTPUT_PLACEMENTS}}"}} {
   %graph = tf_executor.graph {
     %1:2 = tf_executor.island wraps "tf.Const"() {value = dense<[0]> : tensor<1xi32>} : () -> tensor<1xi32>
     %2:2 = tf_executor.island wraps "tf.Abs"(%arg0) : (tensor<?x?x?xf32>) -> tensor<?x?x?xf32>
@@ -18,7 +18,7 @@ Executing tests from //mlir/disc/tests/tensorflow_ops:max.cpp.test
   }
   return %graph : tensor<?x?xf32>
 }
-2023-06-25 09:37:01.924678: I mlir/disc/tests/mlir_feature_test.cc:149] New TF code: func.func @main(%arg0: tensor<?x?x?xf32>) -> tensor<?x?xf32> attributes {tf.entry_function = {inputs = "input0", outputs = "output0", input_placements="gpu", output_placements="gpu"}} {
+2023-06-25 03:54:49.186158: I mlir/disc/tests/mlir_feature_test.cc:149] New TF code: func.func @main(%arg0: tensor<?x?x?xf32>) -> tensor<?x?xf32> attributes {tf.entry_function = {inputs = "input0", outputs = "output0", input_placements="gpu", output_placements="gpu"}} {
   %graph = tf_executor.graph {
     %1:2 = tf_executor.island wraps "tf.Const"() {value = dense<[0]> : tensor<1xi32>} : () -> tensor<1xi32>
     %2:2 = tf_executor.island wraps "tf.Abs"(%arg0) : (tensor<?x?x?xf32>) -> tensor<?x?x?xf32>
@@ -27,37 +27,37 @@ Executing tests from //mlir/disc/tests/tensorflow_ops:max.cpp.test
   }
   return %graph : tensor<?x?xf32>
 }
-2023-06-25 09:37:01.924765: I mlir/disc/tests/mlir_test.cc:233] tf_opt_pat: external/org_tensorflow/tensorflow/compiler/mlir/tf-opt
-2023-06-25 09:37:01.924769: I mlir/disc/tests/mlir_test.cc:234] mlir_file_path: /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/_tmp/b247c1654ecfc81b23b002417f617bea/tempfile-adf59ec6ac82-dacb277b-2577119-5fef0f9e88559
-2023-06-25 09:37:01.924771: I mlir/disc/tests/mlir_test.cc:235] tmp_dir: /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/_tmp/b247c1654ecfc81b23b002417f617bea
-2023-06-25 09:37:01.924774: I mlir/disc/tests/mlir_test.cc:236] test_name: ColReduceFullyDynamicShape3DF32_0
-2023-06-25 09:37:01.924782: I mlir/disc/tests/mlir_test.cc:284] tf_opt_path: external/org_tensorflow/tensorflow/compiler/mlir/tf-opt
+2023-06-25 03:54:49.186261: I mlir/disc/tests/mlir_test.cc:233] tf_opt_pat: external/org_tensorflow/tensorflow/compiler/mlir/tf-opt
+2023-06-25 03:54:49.186266: I mlir/disc/tests/mlir_test.cc:234] mlir_file_path: /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/_tmp/b247c1654ecfc81b23b002417f617bea/tempfile-adf59ec6ac82-7602f1e3-2553507-5feec320fcb82
+2023-06-25 03:54:49.186269: I mlir/disc/tests/mlir_test.cc:235] tmp_dir: /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/_tmp/b247c1654ecfc81b23b002417f617bea
+2023-06-25 03:54:49.186272: I mlir/disc/tests/mlir_test.cc:236] test_name: ColReduceFullyDynamicShape3DF32_0
+2023-06-25 03:54:49.186278: I mlir/disc/tests/mlir_test.cc:284] tf_opt_path: external/org_tensorflow/tensorflow/compiler/mlir/tf-opt
 
-2023-06-25 09:37:01.924788: I mlir/disc/tests/mlir_test.cc:257] program_path: external/org_tensorflow/tensorflow/compiler/mlir/tf-opt
+2023-06-25 03:54:49.186290: I mlir/disc/tests/mlir_test.cc:257] program_path: external/org_tensorflow/tensorflow/compiler/mlir/tf-opt
 
-2023-06-25 09:37:01.984381: I mlir/disc/tests/mlir_test.cc:269] Executed: external/org_tensorflow/tensorflow/compiler/mlir/tf-opt --tf-standard-pipeline /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/_tmp/b247c1654ecfc81b23b002417f617bea/tempfile-adf59ec6ac82-dacb277b-2577119-5fef0f9e88559 -o /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/_tmp/b247c1654ecfc81b23b002417f617beaColReduceFullyDynamicShape3DF32_0_tf_dialect.mlir 
-2023-06-25 09:37:01.984396: I mlir/disc/tests/mlir_test.cc:270] external/org_tensorflow/tensorflow/compiler/mlir/tf-opt: 0
-2023-06-25 09:37:01.984399: I mlir/disc/tests/mlir_test.cc:271] -- stdout:
+2023-06-25 03:54:49.248045: I mlir/disc/tests/mlir_test.cc:269] Executed: external/org_tensorflow/tensorflow/compiler/mlir/tf-opt --tf-standard-pipeline /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/_tmp/b247c1654ecfc81b23b002417f617bea/tempfile-adf59ec6ac82-7602f1e3-2553507-5feec320fcb82 -o /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/_tmp/b247c1654ecfc81b23b002417f617beaColReduceFullyDynamicShape3DF32_0_tf_dialect.mlir 
+2023-06-25 03:54:49.248068: I mlir/disc/tests/mlir_test.cc:270] external/org_tensorflow/tensorflow/compiler/mlir/tf-opt: 0
+2023-06-25 03:54:49.248072: I mlir/disc/tests/mlir_test.cc:271] -- stdout:
 
 ============ END ============
 
-2023-06-25 09:37:01.984402: I mlir/disc/tests/mlir_test.cc:273] -- stderr:
-2023-06-25 09:37:01.971048: I external/org_tensorflow/tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+2023-06-25 03:54:49.248075: I mlir/disc/tests/mlir_test.cc:273] -- stderr:
+2023-06-25 03:54:49.233918: I external/org_tensorflow/tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
 To enable the following instructions: SSE3 SSE4.1 SSE4.2 AVX AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
 
 ============ END ============
 
-2023-06-25 09:37:01.984410: I mlir/disc/tests/mlir_test.cc:275] ret: 0
+2023-06-25 03:54:49.248084: I mlir/disc/tests/mlir_test.cc:275] ret: 0
 
-2023-06-25 09:37:01.984423: I mlir/disc/tests/mlir_test.cc:257] program_path: mlir/disc/disc_compiler_main
+2023-06-25 03:54:49.248099: I mlir/disc/tests/mlir_test.cc:257] program_path: mlir/disc/disc_compiler_main
 
-2023-06-25 09:37:02.861179: I mlir/disc/tests/mlir_test.cc:269] Executed: mlir/disc/disc_compiler_main --mlir-print-elementsattrs-with-hex-if-larger -1 --mlir-elide-elementsattrs-if-larger 8 /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/_tmp/b247c1654ecfc81b23b002417f617beaColReduceFullyDynamicShape3DF32_0_tf_dialect.mlir /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/_tmp/b247c1654ecfc81b23b002417f617beaColReduceFullyDynamicShape3DF32_0.so 
-2023-06-25 09:37:02.861204: I mlir/disc/tests/mlir_test.cc:270] mlir/disc/disc_compiler_main: 0
-2023-06-25 09:37:02.861207: I mlir/disc/tests/mlir_test.cc:271] -- stdout:
+2023-06-25 03:54:50.132109: I mlir/disc/tests/mlir_test.cc:269] Executed: mlir/disc/disc_compiler_main --mlir-print-elementsattrs-with-hex-if-larger -1 --mlir-elide-elementsattrs-if-larger 8 /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/_tmp/b247c1654ecfc81b23b002417f617beaColReduceFullyDynamicShape3DF32_0_tf_dialect.mlir /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/_tmp/b247c1654ecfc81b23b002417f617beaColReduceFullyDynamicShape3DF32_0.so 
+2023-06-25 03:54:50.132139: I mlir/disc/tests/mlir_test.cc:270] mlir/disc/disc_compiler_main: 0
+2023-06-25 03:54:50.132143: I mlir/disc/tests/mlir_test.cc:271] -- stdout:
 
 ============ END ============
 
-2023-06-25 09:37:02.863079: I mlir/disc/tests/mlir_test.cc:273] -- stderr:
+2023-06-25 03:54:50.133884: I mlir/disc/tests/mlir_test.cc:273] -- stderr:
 ======== BEGIN Original Module =========
 module {
   func.func @main(%arg0: tensor<?x?x?xf32>) -> tensor<?x?xf32> attributes {tf.entry_function = {input_placements = "gpu", inputs = "input0", output_placements = "gpu", outputs = "output0"}} {
@@ -69,9 +69,9 @@ module {
 }
 
 ======= END Original Module ==========
-[DISC] Load Input IR takes: 2.077000e-03 s.
+[DISC] Load Input IR takes: 2.018000e-03 s.
 [[ INFO ]] Running TF2XLA
-2023-06-25 09:37:02.033539: I external/org_tensorflow/tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+2023-06-25 03:54:49.297092: I external/org_tensorflow/tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
 To enable the following instructions: SSE3 SSE4.1 SSE4.2 AVX AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
 // -----// IR Dump After SCCP (sccp) //----- //
 module {
@@ -117,55 +117,55 @@ func.func @main(%arg0: tensor<?x?x?xf32>) -> tensor<?x?xf32> attributes {tf.entr
 ===-------------------------------------------------------------------------===
                          ... Execution time report ...
 ===-------------------------------------------------------------------------===
-  Total Execution Time: 0.0085 seconds
+  Total Execution Time: 0.0084 seconds
 
   ----Wall Time----  ----Name----
-    0.0000 (  0.4%)  ReviseArgumentsForStaticRankPass
+    0.0000 (  0.6%)  ReviseArgumentsForStaticRankPass
     0.0000 (  0.1%)  FunctionalControlFlowToRegionsPass
-    0.0043 ( 51.0%)  Inliner
+    0.0044 ( 51.9%)  Inliner
     0.0000 (  0.2%)    (A) CallGraph
-    0.0041 ( 48.3%)  'func.func' Pipeline
-    0.0041 ( 48.3%)    Canonicalizer
+    0.0042 ( 49.3%)  'func.func' Pipeline
+    0.0042 ( 49.3%)    Canonicalizer
     0.0001 (  1.1%)  'func.func' Pipeline
     0.0000 (  0.1%)    DropWhileShapeInvariantPass
     0.0000 (  0.0%)    ReplicateTensorListInitOpsPass
-    0.0001 (  1.0%)    Canonicalizer
-    0.0002 (  2.3%)  SCCP
-    0.0000 (  0.3%)  GuaranteeAllFuncsOneUsePass
+    0.0001 (  0.9%)    Canonicalizer
+    0.0002 (  2.6%)  SCCP
+    0.0000 (  0.2%)  GuaranteeAllFuncsOneUsePass
     0.0000 (  0.0%)    (A) CallGraph
     0.0000 (  0.1%)  TensorFlowShapeInferencePass
     0.0002 (  1.9%)  SCCP
     0.0000 (  0.1%)  TensorListOpsDecompositionPass
     0.0000 (  0.1%)  StackOpsDecompositionPass
     0.0000 (  0.1%)  TensorArrayOpsDecompositionPass
-    0.0000 (  0.6%)  'func.func' Pipeline
-    0.0000 (  0.5%)    DecomposeResourceOpsPass
+    0.0001 (  0.7%)  'func.func' Pipeline
+    0.0001 (  0.7%)    DecomposeResourceOpsPass
     0.0000 (  0.2%)  PromoteResourcesToArgsPass
     0.0000 (  0.1%)  SymbolDCE
     0.0000 (  0.1%)  'func.func' Pipeline
     0.0000 (  0.1%)    SinkConstantsToControlFlowPass
     0.0000 (  0.1%)  TensorFlowShapeInferencePass
-    0.0003 (  3.0%)  StablehloLegalizeToHloPass
-    0.0001 (  0.6%)  'func.func' Pipeline
-    0.0000 (  0.4%)    DiscLowerTfPass
+    0.0002 (  2.7%)  StablehloLegalizeToHloPass
+    0.0000 (  0.6%)  'func.func' Pipeline
+    0.0000 (  0.3%)    DiscLowerTfPass
     0.0000 (  0.2%)    LowerQuantizedPass
     0.0000 (  0.2%)  LegalizeTfTypesPass
-    0.0010 ( 11.9%)  'func.func' Pipeline
-    0.0008 (  9.8%)    LegalizeTF
-    0.0002 (  1.9%)    DiscLowerTfPass
+    0.0010 ( 12.0%)  'func.func' Pipeline
+    0.0008 (  9.7%)    LegalizeTF
+    0.0002 (  2.1%)    DiscLowerTfPass
     0.0000 (  0.1%)    mlir::mhlo::{anonymous}::AdjustLayout
-    0.0000 (  0.2%)  LegalizeTFCollective
+    0.0000 (  0.3%)  LegalizeTFCollective
     0.0001 (  0.8%)  'func.func' Pipeline
     0.0001 (  0.8%)    Canonicalizer
     0.0000 (  0.1%)  TensorFlowShapeInferencePass
-    0.0004 (  4.2%)  'func.func' Pipeline
-    0.0004 (  4.1%)    LegalizeTF
+    0.0003 (  4.0%)  'func.func' Pipeline
+    0.0003 (  4.0%)    LegalizeTF
     0.0000 (  0.1%)  LegalizeTFCommunicationPass
     0.0000 (  0.5%)  'func.func' Pipeline
     0.0000 (  0.4%)    DiscDynamicSliceConverterPass
     0.0000 (  0.1%)    SinkConstantsToControlFlowPass
-   -0.0024 (-28.7%)  Rest
-    0.0085 (100.0%)  Total
+   -0.0026 (-30.7%)  Rest
+    0.0084 (100.0%)  Total
 ======== BEGIN After TF2HLO =========
 module {
   func.func @main(%arg0: tensor<?x?x?xf32>) -> tensor<?x?xf32> attributes {tf.entry_function = {input_placements = "gpu", inputs = "input0", output_placements = "gpu", outputs = "output0"}} {
@@ -177,22 +177,22 @@ module {
 }
 
 ======= END After TF2HLO ==========
-[DISC] tf2hlo takes: 8.766000e-03 s.
+[DISC] tf2hlo takes: 8.764000e-03 s.
 SymbolicDimMgr::save walkRankedTensorValue takes: 4 us
 SymbolicDimMgr::save update attributes takes: 1 us
 SymbolicDimMgr::updateProductEqualityMap simplifySymbolicDimProductPair takes: 0 us
 productSet.size() = 0
-SymbolicDimMgr::updateProductEqualityMap propagate graph takes: 1 us
+SymbolicDimMgr::updateProductEqualityMap propagate graph takes: 2 us
 SymbolicDimMgr::updateProductEqualityMap remove multiply takes: 0 us
 SymbolicDimMgr::updateProductEqualityMap build toRemove  takes: 0 us
 SymbolicDimMgr::updateProductEqualityMap apply toRemove  takes: 0 us
-SymbolicDimMgr::save updateProductEqualityMap takes: 11 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 13 us
 SymbolicDimMgr::save updateFunctionType takes: 1 us
 SymbolicDimMgr::save collect symbolicDim ops takes: 4 us
-SymbolicDimMgr::save remove symbolicDim ops takes: 5 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 1 us
 SymbolicDimMgr::save remove unused production takes: 0 us
 SymbolicDimMgr::save remove unused production #2 takes: 0 us
-SymbolicDimMgr::save canonicalize the name takes: 3 us
+SymbolicDimMgr::save canonicalize the name takes: 4 us
 SymbolicDimMgr::save replace the name takes: 3 us
 SymbolicDimMgr::save updateFunctionType takes: 0 us
 // -----// IR Dump After DiscShapeOptimizationPass (disc-shape-optimization) //----- //
@@ -212,15 +212,15 @@ module {
 }
 
 
-SymbolicDimMgr::save walkRankedTensorValue takes: 3 us
-SymbolicDimMgr::save update attributes takes: 0 us
+SymbolicDimMgr::save walkRankedTensorValue takes: 4 us
+SymbolicDimMgr::save update attributes takes: 1 us
 SymbolicDimMgr::updateProductEqualityMap simplifySymbolicDimProductPair takes: 0 us
 productSet.size() = 0
 SymbolicDimMgr::updateProductEqualityMap propagate graph takes: 1 us
 SymbolicDimMgr::updateProductEqualityMap remove multiply takes: 0 us
 SymbolicDimMgr::updateProductEqualityMap build toRemove  takes: 0 us
 SymbolicDimMgr::updateProductEqualityMap apply toRemove  takes: 0 us
-SymbolicDimMgr::save updateProductEqualityMap takes: 11 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 12 us
 SymbolicDimMgr::save updateFunctionType takes: 1 us
 SymbolicDimMgr::save collect symbolicDim ops takes: 3 us
 SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
@@ -254,7 +254,7 @@ SymbolicDimMgr::updateProductEqualityMap propagate graph takes: 1 us
 SymbolicDimMgr::updateProductEqualityMap remove multiply takes: 0 us
 SymbolicDimMgr::updateProductEqualityMap build toRemove  takes: 0 us
 SymbolicDimMgr::updateProductEqualityMap apply toRemove  takes: 0 us
-SymbolicDimMgr::save updateProductEqualityMap takes: 11 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 12 us
 SymbolicDimMgr::save updateFunctionType takes: 1 us
 SymbolicDimMgr::save collect symbolicDim ops takes: 3 us
 SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
@@ -355,10 +355,10 @@ SymbolicDimMgr::save update attributes takes: 1 us
 SymbolicDimMgr::updateProductEqualityMap simplifySymbolicDimProductPair takes: 19 us
 productSet.size() = 4
 SymbolicDimMgr::updateProductEqualityMap propagate graph takes: 6 us
-SymbolicDimMgr::updateProductEqualityMap remove multiply takes: 31 us
-SymbolicDimMgr::updateProductEqualityMap build toRemove  takes: 2 us
+SymbolicDimMgr::updateProductEqualityMap remove multiply takes: 36 us
+SymbolicDimMgr::updateProductEqualityMap build toRemove  takes: 3 us
 SymbolicDimMgr::updateProductEqualityMap apply toRemove  takes: 2 us
-SymbolicDimMgr::save updateProductEqualityMap takes: 74 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 79 us
 SymbolicDimMgr::save updateFunctionType takes: 1 us
 SymbolicDimMgr::save collect symbolicDim ops takes: 5 us
 SymbolicDimMgr::save remove symbolicDim ops takes: 1 us
@@ -477,15 +477,68 @@ module {
 
 SymbolicDimMgr::save walkRankedTensorValue takes: 5 us
 SymbolicDimMgr::save update attributes takes: 1 us
-SymbolicDimMgr::updateProductEqualityMap simplifySymbolicDimProductPair takes: 19 us
+SymbolicDimMgr::updateProductEqualityMap simplifySymbolicDimProductPair takes: 18 us
 productSet.size() = 4
 SymbolicDimMgr::updateProductEqualityMap propagate graph takes: 5 us
-SymbolicDimMgr::updateProductEqualityMap remove multiply takes: 29 us
-SymbolicDimMgr::updateProductEqualityMap build toRemove  takes: 2 us
+SymbolicDimMgr::updateProductEqualityMap remove multiply takes: 45 us
+SymbolicDimMgr::updateProductEqualityMap build toRemove  takes: 3 us
 SymbolicDimMgr::updateProductEqualityMap apply toRemove  takes: 2 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 87 us
+SymbolicDimMgr::save updateFunctionType takes: 1 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 5 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 1 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 1 us
+SymbolicDimMgr::save canonicalize the name takes: 3 us
+SymbolicDimMgr::save replace the name takes: 5 us
+SymbolicDimMgr::save updateFunctionType takes: 0 us
+// -----// IR Dump After DiscShapeOptimizationPass (disc-shape-optimization) //----- //
+module {
+  func.func @main(%arg0: tensor<?x?x?xf32, [@S0, @S1, @S2]>) -> tensor<?x?xf32, [@S1, @S2]> attributes {tf.entry_function = {input_placements = "gpu", inputs = "input0", output_placements = "gpu", outputs = "output0"}} {
+    %c0 = arith.constant 0 : index
+    %c1 = arith.constant 1 : index
+    %c2 = arith.constant 2 : index
+    %0 = mhlo.constant {disc.device = "gpu"} dense<0xFF800000> : tensor<f32>
+    %dim = tensor.dim %arg0, %c0 : tensor<?x?x?xf32, [@S0, @S1, @S2]>
+    %dim_0 = tensor.dim %arg0, %c1 : tensor<?x?x?xf32, [@S0, @S1, @S2]>
+    %dim_1 = tensor.dim %arg0, %c2 : tensor<?x?x?xf32, [@S0, @S1, @S2]>
+    %1 = mhlo.abs %arg0 {disc.device = "gpu"} : tensor<?x?x?xf32, [@S0, @S1, @S2]>
+    %2 = arith.index_cast %dim : index to i32
+    %3 = arith.index_cast %dim_0 : index to i32
+    %4 = arith.index_cast %dim_1 : index to i32
+    %5 = arith.muli %3, %4 : i32
+    %from_elements = tensor.from_elements %2, %5 {disc.shape_op = true} : tensor<2xi32>
+    %6 = mhlo.dynamic_reshape %1, %from_elements {disc.device = "gpu"} : (tensor<?x?x?xf32, [@S0, @S1, @S2]>, tensor<2xi32>) -> tensor<?x?xf32, [@S0, @S3]>
+    %7 = mhlo.reduce(%6 init: %0) applies mhlo.maximum across dimensions = [0] : (tensor<?x?xf32, [@S0, @S3]>, tensor<f32>) -> tensor<?xf32, [@S3]>
+    %from_elements_2 = tensor.from_elements %3, %4 {disc.shape_op = true} : tensor<2xi32>
+    %8 = mhlo.dynamic_reshape %7, %from_elements_2 {disc.device = "gpu"} : (tensor<?xf32, [@S3]>, tensor<2xi32>) -> tensor<?x?xf32, [@S1, @S2]>
+    return %8 : tensor<?x?xf32, [@S1, @S2]>
+  }
+  "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S0", value = -9223372036854775808 : i64} : () -> ()
+  "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S1", value = -9223372036854775808 : i64} : () -> ()
+  "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S2", value = -9223372036854775808 : i64} : () -> ()
+  "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S3", value = -9223372036854775808 : i64} : () -> ()
+  func.func @shape_constraint_graph() {
+    %0 = "disc_shape.dim"() {name = @S3} : () -> index
+    %1 = "disc_shape.dim"() {name = @S1} : () -> index
+    %2 = "disc_shape.dim"() {name = @S2} : () -> index
+    "disc_shape.tie_product_equal"(%0, %1, %2) {operand_segment_sizes = array<i32: 1, 2>} : (index, index, index) -> ()
+    return
+  }
+}
+
+
+SymbolicDimMgr::save walkRankedTensorValue takes: 5 us
+SymbolicDimMgr::save update attributes takes: 1 us
+SymbolicDimMgr::updateProductEqualityMap simplifySymbolicDimProductPair takes: 15 us
+productSet.size() = 4
+SymbolicDimMgr::updateProductEqualityMap propagate graph takes: 5 us
+SymbolicDimMgr::updateProductEqualityMap remove multiply takes: 32 us
+SymbolicDimMgr::updateProductEqualityMap build toRemove  takes: 2 us
+SymbolicDimMgr::updateProductEqualityMap apply toRemove  takes: 1 us
 SymbolicDimMgr::save updateProductEqualityMap takes: 71 us
 SymbolicDimMgr::save updateFunctionType takes: 1 us
-SymbolicDimMgr::save collect symbolicDim ops takes: 5 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 4 us
 SymbolicDimMgr::save remove symbolicDim ops takes: 1 us
 SymbolicDimMgr::save remove unused production takes: 0 us
 SymbolicDimMgr::save remove unused production #2 takes: 1 us
@@ -530,13 +583,13 @@ module {
 
 SymbolicDimMgr::save walkRankedTensorValue takes: 5 us
 SymbolicDimMgr::save update attributes takes: 1 us
-SymbolicDimMgr::updateProductEqualityMap simplifySymbolicDimProductPair takes: 16 us
+SymbolicDimMgr::updateProductEqualityMap simplifySymbolicDimProductPair takes: 20 us
 productSet.size() = 4
 SymbolicDimMgr::updateProductEqualityMap propagate graph takes: 5 us
-SymbolicDimMgr::updateProductEqualityMap remove multiply takes: 29 us
+SymbolicDimMgr::updateProductEqualityMap remove multiply takes: 32 us
 SymbolicDimMgr::updateProductEqualityMap build toRemove  takes: 2 us
 SymbolicDimMgr::updateProductEqualityMap apply toRemove  takes: 1 us
-SymbolicDimMgr::save updateProductEqualityMap takes: 68 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 76 us
 SymbolicDimMgr::save updateFunctionType takes: 1 us
 SymbolicDimMgr::save collect symbolicDim ops takes: 5 us
 SymbolicDimMgr::save remove symbolicDim ops takes: 1 us
@@ -583,66 +636,13 @@ module {
 
 SymbolicDimMgr::save walkRankedTensorValue takes: 5 us
 SymbolicDimMgr::save update attributes takes: 1 us
-SymbolicDimMgr::updateProductEqualityMap simplifySymbolicDimProductPair takes: 17 us
+SymbolicDimMgr::updateProductEqualityMap simplifySymbolicDimProductPair takes: 20 us
 productSet.size() = 4
 SymbolicDimMgr::updateProductEqualityMap propagate graph takes: 5 us
-SymbolicDimMgr::updateProductEqualityMap remove multiply takes: 29 us
-SymbolicDimMgr::updateProductEqualityMap build toRemove  takes: 2 us
+SymbolicDimMgr::updateProductEqualityMap remove multiply takes: 32 us
+SymbolicDimMgr::updateProductEqualityMap build toRemove  takes: 3 us
 SymbolicDimMgr::updateProductEqualityMap apply toRemove  takes: 2 us
-SymbolicDimMgr::save updateProductEqualityMap takes: 69 us
-SymbolicDimMgr::save updateFunctionType takes: 1 us
-SymbolicDimMgr::save collect symbolicDim ops takes: 5 us
-SymbolicDimMgr::save remove symbolicDim ops takes: 1 us
-SymbolicDimMgr::save remove unused production takes: 0 us
-SymbolicDimMgr::save remove unused production #2 takes: 1 us
-SymbolicDimMgr::save canonicalize the name takes: 3 us
-SymbolicDimMgr::save replace the name takes: 5 us
-SymbolicDimMgr::save updateFunctionType takes: 0 us
-// -----// IR Dump After DiscShapeOptimizationPass (disc-shape-optimization) //----- //
-module {
-  func.func @main(%arg0: tensor<?x?x?xf32, [@S0, @S1, @S2]>) -> tensor<?x?xf32, [@S1, @S2]> attributes {tf.entry_function = {input_placements = "gpu", inputs = "input0", output_placements = "gpu", outputs = "output0"}} {
-    %c0 = arith.constant 0 : index
-    %c1 = arith.constant 1 : index
-    %c2 = arith.constant 2 : index
-    %0 = mhlo.constant {disc.device = "gpu"} dense<0xFF800000> : tensor<f32>
-    %dim = tensor.dim %arg0, %c0 : tensor<?x?x?xf32, [@S0, @S1, @S2]>
-    %dim_0 = tensor.dim %arg0, %c1 : tensor<?x?x?xf32, [@S0, @S1, @S2]>
-    %dim_1 = tensor.dim %arg0, %c2 : tensor<?x?x?xf32, [@S0, @S1, @S2]>
-    %1 = mhlo.abs %arg0 {disc.device = "gpu"} : tensor<?x?x?xf32, [@S0, @S1, @S2]>
-    %2 = arith.index_cast %dim : index to i32
-    %3 = arith.index_cast %dim_0 : index to i32
-    %4 = arith.index_cast %dim_1 : index to i32
-    %5 = arith.muli %3, %4 : i32
-    %from_elements = tensor.from_elements %2, %5 {disc.shape_op = true} : tensor<2xi32>
-    %6 = mhlo.dynamic_reshape %1, %from_elements {disc.device = "gpu"} : (tensor<?x?x?xf32, [@S0, @S1, @S2]>, tensor<2xi32>) -> tensor<?x?xf32, [@S0, @S3]>
-    %7 = mhlo.reduce(%6 init: %0) applies mhlo.maximum across dimensions = [0] : (tensor<?x?xf32, [@S0, @S3]>, tensor<f32>) -> tensor<?xf32, [@S3]>
-    %from_elements_2 = tensor.from_elements %3, %4 {disc.shape_op = true} : tensor<2xi32>
-    %8 = mhlo.dynamic_reshape %7, %from_elements_2 {disc.device = "gpu"} : (tensor<?xf32, [@S3]>, tensor<2xi32>) -> tensor<?x?xf32, [@S1, @S2]>
-    return %8 : tensor<?x?xf32, [@S1, @S2]>
-  }
-  "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S0", value = -9223372036854775808 : i64} : () -> ()
-  "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S1", value = -9223372036854775808 : i64} : () -> ()
-  "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S2", value = -9223372036854775808 : i64} : () -> ()
-  "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S3", value = -9223372036854775808 : i64} : () -> ()
-  func.func @shape_constraint_graph() {
-    %0 = "disc_shape.dim"() {name = @S3} : () -> index
-    %1 = "disc_shape.dim"() {name = @S1} : () -> index
-    %2 = "disc_shape.dim"() {name = @S2} : () -> index
-    "disc_shape.tie_product_equal"(%0, %1, %2) {operand_segment_sizes = array<i32: 1, 2>} : (index, index, index) -> ()
-    return
-  }
-}
-
-
-SymbolicDimMgr::save walkRankedTensorValue takes: 5 us
-SymbolicDimMgr::save update attributes takes: 1 us
-SymbolicDimMgr::updateProductEqualityMap simplifySymbolicDimProductPair takes: 16 us
-productSet.size() = 4
-SymbolicDimMgr::updateProductEqualityMap propagate graph takes: 5 us
-SymbolicDimMgr::updateProductEqualityMap remove multiply takes: 29 us
-SymbolicDimMgr::updateProductEqualityMap build toRemove  takes: 2 us
-SymbolicDimMgr::updateProductEqualityMap apply toRemove  takes: 1 us
-SymbolicDimMgr::save updateProductEqualityMap takes: 67 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 77 us
 SymbolicDimMgr::save updateFunctionType takes: 1 us
 SymbolicDimMgr::save collect symbolicDim ops takes: 5 us
 SymbolicDimMgr::save remove symbolicDim ops takes: 1 us
@@ -1392,18 +1392,18 @@ func.func @main(%arg0: memref<?x?x?xf32, "gpu">) -> memref<?x?xf32, "gpu"> attri
 
 SymbolicDimMgr::save walkRankedTensorValue takes: 1 us
 SymbolicDimMgr::save update attributes takes: 5 us
-SymbolicDimMgr::updateProductEqualityMap simplifySymbolicDimProductPair takes: 7 us
+SymbolicDimMgr::updateProductEqualityMap simplifySymbolicDimProductPair takes: 8 us
 productSet.size() = 2
-SymbolicDimMgr::updateProductEqualityMap propagate graph takes: 4 us
+SymbolicDimMgr::updateProductEqualityMap propagate graph takes: 5 us
 SymbolicDimMgr::updateProductEqualityMap remove multiply takes: 12 us
 SymbolicDimMgr::updateProductEqualityMap build toRemove  takes: 0 us
 SymbolicDimMgr::updateProductEqualityMap apply toRemove  takes: 0 us
-SymbolicDimMgr::save updateProductEqualityMap takes: 39 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 40 us
 SymbolicDimMgr::save updateFunctionType takes: 2 us
 SymbolicDimMgr::save collect symbolicDim ops takes: 4 us
 SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
 SymbolicDimMgr::save remove unused production takes: 0 us
-SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 1 us
 SymbolicDimMgr::save canonicalize the name takes: 3 us
 SymbolicDimMgr::save replace the name takes: 4 us
 SymbolicDimMgr::save updateFunctionType takes: 0 us
@@ -1450,20 +1450,20 @@ func.func @main(%arg0: memref<?x?x?xf32, "gpu">) -> memref<?x?xf32, "gpu"> attri
 
 SymbolicDimMgr::save walkRankedTensorValue takes: 1 us
 SymbolicDimMgr::save update attributes takes: 5 us
-SymbolicDimMgr::updateProductEqualityMap simplifySymbolicDimProductPair takes: 5 us
+SymbolicDimMgr::updateProductEqualityMap simplifySymbolicDimProductPair takes: 6 us
 productSet.size() = 2
 SymbolicDimMgr::updateProductEqualityMap propagate graph takes: 3 us
 SymbolicDimMgr::updateProductEqualityMap remove multiply takes: 11 us
 SymbolicDimMgr::updateProductEqualityMap build toRemove  takes: 0 us
 SymbolicDimMgr::updateProductEqualityMap apply toRemove  takes: 0 us
-SymbolicDimMgr::save updateProductEqualityMap takes: 34 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 36 us
 SymbolicDimMgr::save updateFunctionType takes: 1 us
 SymbolicDimMgr::save collect symbolicDim ops takes: 4 us
 SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
 SymbolicDimMgr::save remove unused production takes: 0 us
 SymbolicDimMgr::save remove unused production #2 takes: 0 us
 SymbolicDimMgr::save canonicalize the name takes: 3 us
-SymbolicDimMgr::save replace the name takes: 4 us
+SymbolicDimMgr::save replace the name takes: 5 us
 SymbolicDimMgr::save updateFunctionType takes: 0 us
 // -----// IR Dump After DiscSpecializeFusionWithSpeculationPass (disc-specialize-fusion-with-speculation) //----- //
 func.func @main(%arg0: memref<?x?x?xf32, "gpu">) -> memref<?x?xf32, "gpu"> attributes {tf.entry_function = {input_placements = "gpu", inputs = "input0", output_placements = "gpu", outputs = "output0"}} {
@@ -1810,7 +1810,7 @@ kColReduction <main_kColReduction_reduce__4_1_0___8w32h>, use_new: 0 schedule_hi
 kColReduction <main_kColReduction_reduce__4_1_0___8w16h>, use_new: 0 schedule_hint: 2
 SymbolicDimMgr::save walkRankedTensorValue takes: 4 us
 SymbolicDimMgr::save update attributes takes: 10 us
-SymbolicDimMgr::updateProductEqualityMap simplifySymbolicDimProductPair takes: 8 us
+SymbolicDimMgr::updateProductEqualityMap simplifySymbolicDimProductPair takes: 7 us
 productSet.size() = 2
 SymbolicDimMgr::updateProductEqualityMap propagate graph takes: 5 us
 SymbolicDimMgr::updateProductEqualityMap remove multiply takes: 12 us
@@ -1818,11 +1818,11 @@ SymbolicDimMgr::updateProductEqualityMap build toRemove  takes: 0 us
 SymbolicDimMgr::updateProductEqualityMap apply toRemove  takes: 0 us
 SymbolicDimMgr::save updateProductEqualityMap takes: 40 us
 SymbolicDimMgr::save updateFunctionType takes: 4 us
-SymbolicDimMgr::save collect symbolicDim ops takes: 10 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 9 us
 SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
 SymbolicDimMgr::save remove unused production takes: 0 us
 SymbolicDimMgr::save remove unused production #2 takes: 0 us
-SymbolicDimMgr::save canonicalize the name takes: 4 us
+SymbolicDimMgr::save canonicalize the name takes: 3 us
 SymbolicDimMgr::save replace the name takes: 10 us
 SymbolicDimMgr::save updateFunctionType takes: 2 us
 // -----// IR Dump After DiscLhloLegalizeRootsToParallelLoopsPass (disc-lhlo-legalize-roots-to-parallel-loops) //----- //
@@ -1871,8 +1871,8 @@ func.func @main(%arg0: !disc_ral.context) attributes {tf.entry_function = {input
         memref.store %17, %alloc_4[%16] : memref<?xf32, "gpu">
         scf.yield
       }
-      %13 = arith.ceildivsi %7, %c8 : index
-      %14 = arith.ceildivsi %dim_1, %c32 : index
+      %13 = arith.ceildivsi %7, %c8 : index // 1300/8, expect 1300/32 = 41
+      %14 = arith.ceildivsi %dim_1, %c32 : index // 110 / 32, expect 1300/8/64 = 1
       %15 = arith.muli %13, %14 : index
       scf.parallel (%arg1, %arg2) = (%c0, %c0) to (%15, %c256) step (%c1, %c1) {
         %16 = memref.load %alloc[] : memref<f32, "gpu">
@@ -15075,7 +15075,7 @@ module attributes {gpu.container_module} {
 ===-------------------------------------------------------------------------===
                          ... Execution time report ...
 ===-------------------------------------------------------------------------===
-  Total Execution Time: 0.5465 seconds
+  Total Execution Time: 0.5633 seconds
 
   ----Wall Time----  ----Name----
     0.0004 (  0.1%)  Inliner
@@ -15096,10 +15096,8 @@ module attributes {gpu.container_module} {
     0.0000 (  0.0%)    DiscLowerGpuQuantizeAndDequantizePass
     0.0000 (  0.0%)    ConvertShapeToStandardPass
     0.0013 (  0.2%)  DiscShapeOptimizationPass
-    0.0013 (  0.2%)  'builtin.func' Pipeline
-    0.0000 (  0.0%)    CSE
-    0.0000 (  0.0%)      (A) DominanceInfo
-    0.0012 (  0.2%)    CSE
+    0.0014 (  0.2%)  'builtin.func' Pipeline
+    0.0013 (  0.2%)    CSE
     0.0000 (  0.0%)      (A) DominanceInfo
     0.0004 (  0.1%)  'func.func' Pipeline
     0.0000 (  0.0%)    ConvertTensorToStandardPass
@@ -15111,15 +15109,15 @@ module attributes {gpu.container_module} {
     0.0000 (  0.0%)    DiscAlgebraicSimplifierPass
     0.0000 (  0.0%)    SplitLargeOpsPass
     0.0000 (  0.0%)    DotRewriterPass
-    0.0010 (  0.2%)  DiscShapeOptimizationPass
+    0.0011 (  0.2%)  DiscShapeOptimizationPass
     0.0001 (  0.0%)  'func.func' Pipeline
     0.0001 (  0.0%)    DiscDotMergePass
-    0.0010 (  0.2%)  DiscShapeOptimizationPass
+    0.0011 (  0.2%)  DiscShapeOptimizationPass
     0.0005 (  0.1%)  'func.func' Pipeline
     0.0005 (  0.1%)    HloCanonicalizeReductionPass
-    0.0024 (  0.4%)  DiscShapeOptimizationPass
-    0.0006 (  0.1%)  DiscMarkShapeCalculationPass
-    0.0006 (  0.1%)  PlaceOpsPass
+    0.0026 (  0.5%)  DiscShapeOptimizationPass
+    0.0007 (  0.1%)  DiscMarkShapeCalculationPass
+    0.0007 (  0.1%)  PlaceOpsPass
     0.0004 (  0.1%)  'func.func' Pipeline
     0.0002 (  0.0%)    Canonicalizer
     0.0000 (  0.0%)    CSE
@@ -15132,57 +15130,57 @@ module attributes {gpu.container_module} {
     0.0000 (  0.0%)    ConvRewriterPass
     0.0000 (  0.0%)    ConvRewriterPass
     0.0000 (  0.0%)    QuantizedDotRewriterPass
-    0.0016 (  0.3%)  DiscShapeOptimizationPass
+    0.0017 (  0.3%)  DiscShapeOptimizationPass
     0.0017 (  0.3%)  'func.func' Pipeline
     0.0002 (  0.0%)    Canonicalizer
     0.0000 (  0.0%)    CSE
     0.0000 (  0.0%)      (A) DominanceInfo
     0.0001 (  0.0%)    Canonicalizer
-    0.0014 (  0.2%)    TransposeSimplifierPass
+    0.0013 (  0.2%)    TransposeSimplifierPass
     0.0000 (  0.0%)    GpuConvPaddingLegalizationPass
-    0.0016 (  0.3%)  DiscShapeOptimizationPass
+    0.0017 (  0.3%)  DiscShapeOptimizationPass
     0.0001 (  0.0%)  'func.func' Pipeline
     0.0001 (  0.0%)    DiscAlgebraicSimplifierPass
-    0.0018 (  0.3%)  DiscShapeOptimizationPass
-    0.0010 (  0.2%)  'func.func' Pipeline
+    0.0019 (  0.3%)  DiscShapeOptimizationPass
+    0.0011 (  0.2%)  'func.func' Pipeline
     0.0008 (  0.1%)    Canonicalizer
     0.0000 (  0.0%)    CSE
     0.0000 (  0.0%)      (A) DominanceInfo
-    0.0002 (  0.0%)    Canonicalizer
-    0.0009 (  0.2%)  FuncBufferize
-    0.0012 (  0.2%)  DiscHloLegalizeToLhloPass
-    0.0019 (  0.3%)  HloLegalizeToLhloPass
-    0.0011 (  0.2%)  'func.func' Pipeline
-    0.0011 (  0.2%)    Canonicalizer
+    0.0003 (  0.0%)    Canonicalizer
+    0.0010 (  0.2%)  FuncBufferize
+    0.0013 (  0.2%)  DiscHloLegalizeToLhloPass
+    0.0020 (  0.4%)  HloLegalizeToLhloPass
+    0.0012 (  0.2%)  'func.func' Pipeline
+    0.0012 (  0.2%)    Canonicalizer
     0.0001 (  0.0%)  DiscLhloRewriterPass
-    0.0032 (  0.6%)  'func.func' Pipeline
+    0.0034 (  0.6%)  'func.func' Pipeline
     0.0002 (  0.0%)    Canonicalizer
     0.0001 (  0.0%)    ConvertShapeToStandardPass
     0.0002 (  0.0%)    Canonicalizer
-    0.0008 (  0.1%)    CSE
+    0.0009 (  0.2%)    CSE
     0.0000 (  0.0%)      (A) DominanceInfo
     0.0002 (  0.0%)    Canonicalizer
-    0.0008 (  0.2%)    LegalizeToTensorOpPass
+    0.0009 (  0.2%)    LegalizeToTensorOpPass
     0.0009 (  0.2%)    Canonicalizer
     0.0001 (  0.0%)    StdBufferizePass
     0.0001 (  0.0%)  ArithBufferize
-    0.0033 (  0.6%)  'func.func' Pipeline
-    0.0008 (  0.1%)    TensorBufferize
+    0.0037 (  0.6%)  'func.func' Pipeline
+    0.0009 (  0.2%)    TensorBufferize
     0.0001 (  0.0%)    FinalizingBufferize
-    0.0009 (  0.2%)    Canonicalizer
-    0.0007 (  0.1%)    CSE
+    0.0010 (  0.2%)    Canonicalizer
+    0.0008 (  0.1%)    CSE
     0.0000 (  0.0%)      (A) DominanceInfo
     0.0002 (  0.0%)    Canonicalizer
     0.0007 (  0.1%)    DiscMemrefCanonicalizer
-    0.0010 (  0.2%)  DiscAssignMemorySpacePass
-    0.0066 (  1.2%)  'func.func' Pipeline
+    0.0011 (  0.2%)  DiscAssignMemorySpacePass
+    0.0072 (  1.3%)  'func.func' Pipeline
     0.0001 (  0.0%)    DiscDuplicateComputationForFusionPass
     0.0008 (  0.1%)    PromoteBuffersToStack
     0.0001 (  0.0%)    DiscMemRefLoadStoreSimplifierPass
-    0.0011 (  0.2%)    DiscFusionPass
+    0.0012 (  0.2%)    DiscFusionPass
     0.0000 (  0.0%)    DiscFuseSplatConstPass
-    0.0013 (  0.2%)    DiscSpecializeFusionWithSpeculationPass
-    0.0013 (  0.2%)    Canonicalizer
+    0.0014 (  0.3%)    DiscSpecializeFusionWithSpeculationPass
+    0.0015 (  0.3%)    Canonicalizer
     0.0000 (  0.0%)    CSE
     0.0000 (  0.0%)      (A) DominanceInfo
     0.0002 (  0.0%)    Canonicalizer
@@ -15190,84 +15188,84 @@ module attributes {gpu.container_module} {
     0.0000 (  0.0%)    CSE
     0.0000 (  0.0%)      (A) DominanceInfo
     0.0002 (  0.0%)    Canonicalizer
-    0.0012 (  0.2%)    BufferDeallocation
+    0.0013 (  0.2%)    BufferDeallocation
     0.0001 (  0.0%)    DiscBufferDeallocationPass
-    0.0015 (  0.3%)  RalInjectExecutionContextPass
-    0.0015 (  0.3%)  'func.func' Pipeline
-    0.0015 (  0.3%)    DiscLowerToLibraryCallPass
+    0.0016 (  0.3%)  RalInjectExecutionContextPass
+    0.0017 (  0.3%)  'func.func' Pipeline
+    0.0017 (  0.3%)    DiscLowerToLibraryCallPass
     0.0002 (  0.0%)  DiscConstToRALPass
-    0.0606 ( 11.1%)  'func.func' Pipeline
+    0.0661 ( 11.7%)  'func.func' Pipeline
     0.0001 (  0.0%)    DiscMemRefLoadStoreSimplifierPass
-    0.0035 (  0.6%)    DiscLhloLegalizeRootsToParallelLoopsPass
-    0.0029 (  0.5%)    ExpandOps
+    0.0038 (  0.7%)    DiscLhloLegalizeRootsToParallelLoopsPass
+    0.0032 (  0.6%)    ExpandOps
     0.0004 (  0.1%)    UnhandledAtomicRMWConverterPass
-    0.0032 (  0.6%)    InputInlineFusionPass
+    0.0035 (  0.6%)    InputInlineFusionPass
     0.0002 (  0.0%)    ForLoopUnrollInterleave
-    0.0038 (  0.7%)    ArithExpandOps
-    0.0038 (  0.7%)    DiscBF16ExpansionPass
+    0.0042 (  0.7%)    ArithExpandOps
+    0.0042 (  0.7%)    DiscBF16ExpansionPass
     0.0005 (  0.1%)    FoldMemRefAliasOps
-    0.0060 (  1.1%)    DiscFlattenMemrefAccessPass
-    0.0057 (  1.0%)    Canonicalizer
-    0.0043 (  0.8%)    CSE
+    0.0066 (  1.2%)    DiscFlattenMemrefAccessPass
+    0.0061 (  1.1%)    Canonicalizer
+    0.0048 (  0.8%)    CSE
     0.0000 (  0.0%)      (A) DominanceInfo
     0.0006 (  0.1%)    Canonicalizer
     0.0008 (  0.1%)    DiscMemRefCSEPass
-    0.0038 (  0.7%)    ConvertShapeToStandardPass
-    0.0039 (  0.7%)    Canonicalizer
+    0.0041 (  0.7%)    ConvertShapeToStandardPass
+    0.0043 (  0.8%)    Canonicalizer
     0.0003 (  0.0%)    CSE
     0.0000 (  0.0%)      (A) DominanceInfo
     0.0006 (  0.1%)    Canonicalizer
-    0.0036 (  0.7%)    ParallelLoopCollapsing
-    0.0039 (  0.7%)    SCFParallelLoopTiling
-    0.0041 (  0.7%)    GpuMapParallelLoopsPass
-    0.0047 (  0.9%)    ConvertParallelLoopToGpu
-    0.0005 (  0.1%)  'func' Pipeline
-    0.0005 (  0.1%)    CSE
+    0.0040 (  0.7%)    ParallelLoopCollapsing
+    0.0043 (  0.8%)    SCFParallelLoopTiling
+    0.0045 (  0.8%)    GpuMapParallelLoopsPass
+    0.0052 (  0.9%)    ConvertParallelLoopToGpu
+    0.0006 (  0.1%)  'func' Pipeline
+    0.0006 (  0.1%)    CSE
     0.0000 (  0.0%)      (A) DominanceInfo
-    0.0051 (  0.9%)  GpuLaunchSinkIndexComputations
-    0.0058 (  1.1%)  GpuKernelOutlining
-    0.0055 (  1.0%)  AssignKernelNamePass
-    0.0015 (  0.3%)  'func.func' Pipeline
-    0.0015 (  0.3%)    LhloFusionInlinerPass
+    0.0056 (  1.0%)  GpuLaunchSinkIndexComputations
+    0.0064 (  1.1%)  GpuKernelOutlining
+    0.0061 (  1.1%)  AssignKernelNamePass
+    0.0016 (  0.3%)  'func.func' Pipeline
+    0.0016 (  0.3%)    LhloFusionInlinerPass
     0.0004 (  0.1%)  DiscCompIntensFusionToCUDASourcePass
-    0.0053 (  1.0%)  ReviseGpuKernelOutliningPass
-    0.3342 ( 61.2%)  'gpu.module' Pipeline
+    0.0058 (  1.0%)  ReviseGpuKernelOutliningPass
+    0.3347 ( 59.4%)  'gpu.module' Pipeline
     0.0004 (  0.1%)    LoopInvariantCodeMotion
-    0.0039 (  0.7%)    'gpu.func' Pipeline
-    0.0039 (  0.7%)      SideEffectLoopInvariantCodeMotionPass
-    0.0003 (  0.1%)    LoopInvariantCodeMotion
-    0.0034 (  0.6%)    CSE
+    0.0042 (  0.7%)    'gpu.func' Pipeline
+    0.0042 (  0.7%)      SideEffectLoopInvariantCodeMotionPass
+    0.0003 (  0.0%)    LoopInvariantCodeMotion
+    0.0038 (  0.7%)    CSE
     0.0000 (  0.0%)      (A) DominanceInfo
-    0.0036 (  0.7%)    SCFToControlFlow
-    0.0035 (  0.6%)    ConvertAffineToStandard
-    0.0034 (  0.6%)    StripDebugInfo
-    0.0090 (  1.7%)    DiscLowerGpuOpsToNVVMOpsPass
-    0.0039 (  0.7%)    'llvm.func' Pipeline
-    0.0039 (  0.7%)      LLVMInsertValueSimplifierPass
-    0.0038 (  0.7%)    FunctionDeadArgumentEliminationPass
-    0.2987 ( 54.7%)    GpuKernelToBlobPass
+    0.0040 (  0.7%)    SCFToControlFlow
+    0.0039 (  0.7%)    ConvertAffineToStandard
+    0.0037 (  0.7%)    StripDebugInfo
+    0.0098 (  1.7%)    DiscLowerGpuOpsToNVVMOpsPass
+    0.0042 (  0.7%)    'llvm.func' Pipeline
+    0.0042 (  0.7%)      LLVMInsertValueSimplifierPass
+    0.0042 (  0.7%)    FunctionDeadArgumentEliminationPass
+    0.2961 ( 52.6%)    GpuKernelToBlobPass
     0.0004 (  0.1%)  DiscGPUSourceToLibPass
     0.0024 (  0.4%)  'func.func' Pipeline
-    0.0017 (  0.3%)    Canonicalizer
+    0.0018 (  0.3%)    Canonicalizer
     0.0001 (  0.0%)    CSE
     0.0000 (  0.0%)      (A) DominanceInfo
     0.0003 (  0.1%)    Canonicalizer
     0.0001 (  0.0%)    RemoveDeadBufferPass
     0.0002 (  0.0%)    LinalgLowerToLoops
-    0.0128 (  2.3%)  SCFToControlFlow
-    0.0021 (  0.4%)  'func.func' Pipeline
+    0.0139 (  2.5%)  SCFToControlFlow
+    0.0022 (  0.4%)  'func.func' Pipeline
     0.0002 (  0.0%)    ExpandStridedMetadata
-    0.0015 (  0.3%)    Canonicalizer
+    0.0017 (  0.3%)    Canonicalizer
     0.0001 (  0.0%)    CSE
     0.0000 (  0.0%)      (A) DominanceInfo
-    0.0003 (  0.1%)    Canonicalizer
-    0.0133 (  2.4%)  ConvertAffineToStandard
-    0.0129 (  2.4%)  StripDebugInfo
-    0.0127 (  2.3%)  DiscStripShapeConstraintOpsPass
-    0.0218 (  4.0%)  DiscToLLVMPass
-    0.0060 (  1.1%)  Rest
-    0.5465 (100.0%)  Total
-[DISC] LowerHLOToLLVM takes: 5.474910e-01 s.
+    0.0003 (  0.0%)    Canonicalizer
+    0.0143 (  2.5%)  ConvertAffineToStandard
+    0.0141 (  2.5%)  StripDebugInfo
+    0.0139 (  2.5%)  DiscStripShapeConstraintOpsPass
+    0.0234 (  4.2%)  DiscToLLVMPass
+    0.0056 (  1.0%)  Rest
+    0.5633 (100.0%)  Total
+[DISC] LowerHLOToLLVM takes: 5.642090e-01 s.
 before optimize llvm module:
 ; ModuleID = 'LLVMDialectModule'
 source_filename = "LLVMDialectModule"
@@ -16562,114 +16560,114 @@ define void @main(ptr %0) local_unnamed_addr {
   ret void
 }
 
-[DISC] LowerLLVMToBinary takes: 2.604300e-02 s.
+[DISC] LowerLLVMToBinary takes: 2.571000e-02 s.
 object file to shared library command: gcc --shared -o /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/_tmp/b247c1654ecfc81b23b002417f617beaColReduceFullyDynamicShape3DF32_0.so /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/_tmp/b247c1654ecfc81b23b002417f617beaColReduceFullyDynamicShape3DF32_0.so.o
 save shared lib file to : /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/_tmp/b247c1654ecfc81b23b002417f617beaColReduceFullyDynamicShape3DF32_0.so
-[DISC] BinaryStrToSharedLibrary takes: 9.822000e-03 s.
-[DISC] LowerHLOToSharedLibrary takes: 7.648420e-01 s.
+[DISC] BinaryStrToSharedLibrary takes: 9.361000e-03 s.
+[DISC] LowerHLOToSharedLibrary takes: 7.740070e-01 s.
 
 ============ END ============
 
-2023-06-25 09:37:02.864415: I mlir/disc/tests/mlir_test.cc:275] ret: 0
+2023-06-25 03:54:50.135116: I mlir/disc/tests/mlir_test.cc:275] ret: 0
 
-2023-06-25 09:37:02.864535: I mlir/disc/tests/mlir_test.cc:241] run compiled program
+2023-06-25 03:54:50.135189: I mlir/disc/tests/mlir_test.cc:241] run compiled program
 
-2023-06-25 09:37:03.071003: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:03.073784: I mlir/disc/tests/mlir_test.cc:932] --- MLIR Execution uses: 2.848 ms
-2023-06-25 09:37:03.073890: I mlir/disc/tests/mlir_test.cc:183] out buffer = 0x7f495128bc00
-2023-06-25 09:37:03.073901: I mlir/disc/tests/mlir_test.cc:184] out shape:
-2023-06-25 09:37:03.073904: I mlir/disc/tests/mlir_test.cc:186]   dim #0: 100
-2023-06-25 09:37:03.073906: I mlir/disc/tests/mlir_test.cc:186]   dim #1: 13
-2023-06-25 09:37:03.073951: I mlir/disc/tests/mlir_test.cc:244] run golden tf
+2023-06-25 03:54:50.332083: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:50.334920: I mlir/disc/tests/mlir_test.cc:932] --- MLIR Execution uses: 2.854 ms
+2023-06-25 03:54:50.335017: I mlir/disc/tests/mlir_test.cc:183] out buffer = 0x7f143b28bc00
+2023-06-25 03:54:50.335025: I mlir/disc/tests/mlir_test.cc:184] out shape:
+2023-06-25 03:54:50.335029: I mlir/disc/tests/mlir_test.cc:186]   dim #0: 100
+2023-06-25 03:54:50.335032: I mlir/disc/tests/mlir_test.cc:186]   dim #1: 13
+2023-06-25 03:54:50.335080: I mlir/disc/tests/mlir_test.cc:244] run golden tf
 
-2023-06-25 09:37:03.073960: I mlir/disc/tests/mlir_test.cc:257] program_path: external/org_tensorflow/tensorflow/compiler/mlir/tf-mlir-translate
+2023-06-25 03:54:50.335088: I mlir/disc/tests/mlir_test.cc:257] program_path: external/org_tensorflow/tensorflow/compiler/mlir/tf-mlir-translate
 
-2023-06-25 09:37:03.138858: I mlir/disc/tests/mlir_test.cc:269] Executed: external/org_tensorflow/tensorflow/compiler/mlir/tf-mlir-translate -mlir-to-graphdef /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/_tmp/b247c1654ecfc81b23b002417f617bea/tempfile-adf59ec6ac82-dacb277b-2577119-5fef0f9e88559 -o /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/_tmp/b247c1654ecfc81b23b002417f617beaColReduceFullyDynamicShape3DF32_0.pbtxt 
-2023-06-25 09:37:03.138869: I mlir/disc/tests/mlir_test.cc:270] external/org_tensorflow/tensorflow/compiler/mlir/tf-mlir-translate: 0
-2023-06-25 09:37:03.138872: I mlir/disc/tests/mlir_test.cc:271] -- stdout:
-
-============ END ============
-
-2023-06-25 09:37:03.138875: I mlir/disc/tests/mlir_test.cc:273] -- stderr:
+2023-06-25 03:54:50.393096: I mlir/disc/tests/mlir_test.cc:269] Executed: external/org_tensorflow/tensorflow/compiler/mlir/tf-mlir-translate -mlir-to-graphdef /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/_tmp/b247c1654ecfc81b23b002417f617bea/tempfile-adf59ec6ac82-7602f1e3-2553507-5feec320fcb82 -o /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/_tmp/b247c1654ecfc81b23b002417f617beaColReduceFullyDynamicShape3DF32_0.pbtxt 
+2023-06-25 03:54:50.393107: I mlir/disc/tests/mlir_test.cc:270] external/org_tensorflow/tensorflow/compiler/mlir/tf-mlir-translate: 0
+2023-06-25 03:54:50.393110: I mlir/disc/tests/mlir_test.cc:271] -- stdout:
 
 ============ END ============
 
-2023-06-25 09:37:03.138878: I mlir/disc/tests/mlir_test.cc:275] ret: 0
+2023-06-25 03:54:50.393112: I mlir/disc/tests/mlir_test.cc:273] -- stderr:
 
-2023-06-25 09:37:03.138886: I mlir/disc/tests/mlir_test.cc:391] graphdef_path: /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/_tmp/b247c1654ecfc81b23b002417f617beaColReduceFullyDynamicShape3DF32_0.pbtxt
-2023-06-25 09:37:03.140234: I external/org_tensorflow/tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+============ END ============
+
+2023-06-25 03:54:50.393115: I mlir/disc/tests/mlir_test.cc:275] ret: 0
+
+2023-06-25 03:54:50.393123: I mlir/disc/tests/mlir_test.cc:391] graphdef_path: /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/_tmp/b247c1654ecfc81b23b002417f617beaColReduceFullyDynamicShape3DF32_0.pbtxt
+2023-06-25 03:54:50.394635: I external/org_tensorflow/tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
 To enable the following instructions: SSE3 SSE4.1 SSE4.2 AVX AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
-2023-06-25 09:37:04.007146: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:04.009632: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:04.012023: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:04.014428: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:04.016792: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:04.019119: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:04.021440: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:04.023766: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:04.140682: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:04.143078: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:04.145423: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:04.147785: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:04.150098: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:04.152425: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:04.154745: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:04.157062: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:04.159375: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:04.161679: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:04.163997: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:04.166311: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:04.168615: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:04.170929: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:04.173227: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:04.175532: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:06.709025: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:06.711556: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:06.713945: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:06.716368: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:06.718733: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:06.721080: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:06.723432: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:06.725782: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:06.728146: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:06.730468: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:06.732793: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:06.735123: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:06.737440: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:06.739764: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:06.742072: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:06.744387: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:06.746724: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:06.749007: I external/org_tensorflow/tensorflow/core/common_runtime/gpu/gpu_device.cc:1635] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 79025 MB memory:  -> device: 0, name: NVIDIA A100-SXM4-80GB, pci bus id: 0000:00:07.0, compute capability: 8.0
-2023-06-25 09:37:06.749918: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:06.752194: I external/org_tensorflow/tensorflow/core/common_runtime/gpu/gpu_device.cc:1635] Created device /job:localhost/replica:0/task:0/device:GPU:1 with 79149 MB memory:  -> device: 1, name: NVIDIA A100-SXM4-80GB, pci bus id: 0000:00:08.0, compute capability: 8.0
-2023-06-25 09:37:06.752751: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:06.755032: I external/org_tensorflow/tensorflow/core/common_runtime/gpu/gpu_device.cc:1635] Created device /job:localhost/replica:0/task:0/device:GPU:2 with 79149 MB memory:  -> device: 2, name: NVIDIA A100-SXM4-80GB, pci bus id: 0000:00:09.0, compute capability: 8.0
-2023-06-25 09:37:06.755596: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:06.757869: I external/org_tensorflow/tensorflow/core/common_runtime/gpu/gpu_device.cc:1635] Created device /job:localhost/replica:0/task:0/device:GPU:3 with 79149 MB memory:  -> device: 3, name: NVIDIA A100-SXM4-80GB, pci bus id: 0000:00:0a.0, compute capability: 8.0
-2023-06-25 09:37:06.758409: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:06.760684: I external/org_tensorflow/tensorflow/core/common_runtime/gpu/gpu_device.cc:1635] Created device /job:localhost/replica:0/task:0/device:GPU:4 with 79149 MB memory:  -> device: 4, name: NVIDIA A100-SXM4-80GB, pci bus id: 0000:00:0b.0, compute capability: 8.0
-2023-06-25 09:37:06.761231: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:06.763497: I external/org_tensorflow/tensorflow/core/common_runtime/gpu/gpu_device.cc:1635] Created device /job:localhost/replica:0/task:0/device:GPU:5 with 79149 MB memory:  -> device: 5, name: NVIDIA A100-SXM4-80GB, pci bus id: 0000:00:0c.0, compute capability: 8.0
-2023-06-25 09:37:06.764042: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:06.766299: I external/org_tensorflow/tensorflow/core/common_runtime/gpu/gpu_device.cc:1635] Created device /job:localhost/replica:0/task:0/device:GPU:6 with 79149 MB memory:  -> device: 6, name: NVIDIA A100-SXM4-80GB, pci bus id: 0000:00:0d.0, compute capability: 8.0
-2023-06-25 09:37:06.766847: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2023-06-25 09:37:06.769109: I external/org_tensorflow/tensorflow/core/common_runtime/gpu/gpu_device.cc:1635] Created device /job:localhost/replica:0/task:0/device:GPU:7 with 79149 MB memory:  -> device: 7, name: NVIDIA A100-SXM4-80GB, pci bus id: 0000:00:0e.0, compute capability: 8.0
-2023-06-25 09:37:06.810438: I mlir/disc/tests/mlir_test.cc:467] --- TF Execution uses: 22.261 ms
-2023-06-25 09:37:06.810458: I mlir/disc/tests/mlir_test.cc:474] 	output shape #0: [100,13]
-2023-06-25 09:37:06.810960: I mlir/disc/tests/mlir_test.cc:467] --- TF Execution uses: 0.493 ms
-2023-06-25 09:37:06.810968: I mlir/disc/tests/mlir_test.cc:474] 	output shape #0: [100,13]
-2023-06-25 09:37:06.811500: I mlir/disc/tests/mlir_test.cc:467] --- TF Execution uses: 0.515 ms
-2023-06-25 09:37:06.811523: I mlir/disc/tests/mlir_test.cc:474] 	output shape #0: [100,13]
-2023-06-25 09:37:06.811800: I mlir/disc/tests/mlir_test.cc:467] --- TF Execution uses: 0.27 ms
-2023-06-25 09:37:06.811805: I mlir/disc/tests/mlir_test.cc:474] 	output shape #0: [100,13]
-2023-06-25 09:37:06.812082: I mlir/disc/tests/mlir_test.cc:467] --- TF Execution uses: 0.272 ms
-2023-06-25 09:37:06.812085: I mlir/disc/tests/mlir_test.cc:474] 	output shape #0: [100,13]
-2023-06-25 09:37:06.812097: I mlir/disc/tests/mlir_test.cc:484] processing output 0
-2023-06-25 09:37:06.813797: I ./mlir/disc/tests/mlir_feature_test.h:37] Unset env setting:
-[       OK ] TFMaxOpTest.ColReduceFullyDynamicShape3DF32 (4889 ms)
-[----------] 1 test from TFMaxOpTest (4889 ms total)
+2023-06-25 03:54:51.192339: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:51.194875: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:51.197243: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:51.199619: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:51.201932: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:51.204248: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:51.206557: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:51.208883: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:51.323204: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:51.325587: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:51.327938: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:51.330273: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:51.332594: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:51.334906: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:51.337221: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:51.339533: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:51.341844: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:51.344155: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:51.346460: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:51.348787: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:51.351099: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:51.353399: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:51.355713: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:51.358012: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:53.875099: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:53.877662: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:53.880067: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:53.882466: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:53.884825: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:53.887182: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:53.889526: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:53.891862: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:53.894263: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:53.896614: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:53.898934: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:53.901334: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:53.903745: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:53.906053: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:53.908369: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:53.910691: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:53.913004: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:53.915329: I external/org_tensorflow/tensorflow/core/common_runtime/gpu/gpu_device.cc:1635] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 79025 MB memory:  -> device: 0, name: NVIDIA A100-SXM4-80GB, pci bus id: 0000:00:07.0, compute capability: 8.0
+2023-06-25 03:54:53.916381: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:53.918668: I external/org_tensorflow/tensorflow/core/common_runtime/gpu/gpu_device.cc:1635] Created device /job:localhost/replica:0/task:0/device:GPU:1 with 79149 MB memory:  -> device: 1, name: NVIDIA A100-SXM4-80GB, pci bus id: 0000:00:08.0, compute capability: 8.0
+2023-06-25 03:54:53.919248: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:53.921533: I external/org_tensorflow/tensorflow/core/common_runtime/gpu/gpu_device.cc:1635] Created device /job:localhost/replica:0/task:0/device:GPU:2 with 79149 MB memory:  -> device: 2, name: NVIDIA A100-SXM4-80GB, pci bus id: 0000:00:09.0, compute capability: 8.0
+2023-06-25 03:54:53.922068: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:53.924342: I external/org_tensorflow/tensorflow/core/common_runtime/gpu/gpu_device.cc:1635] Created device /job:localhost/replica:0/task:0/device:GPU:3 with 79149 MB memory:  -> device: 3, name: NVIDIA A100-SXM4-80GB, pci bus id: 0000:00:0a.0, compute capability: 8.0
+2023-06-25 03:54:53.924896: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:53.927170: I external/org_tensorflow/tensorflow/core/common_runtime/gpu/gpu_device.cc:1635] Created device /job:localhost/replica:0/task:0/device:GPU:4 with 79149 MB memory:  -> device: 4, name: NVIDIA A100-SXM4-80GB, pci bus id: 0000:00:0b.0, compute capability: 8.0
+2023-06-25 03:54:53.927712: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:53.929974: I external/org_tensorflow/tensorflow/core/common_runtime/gpu/gpu_device.cc:1635] Created device /job:localhost/replica:0/task:0/device:GPU:5 with 79149 MB memory:  -> device: 5, name: NVIDIA A100-SXM4-80GB, pci bus id: 0000:00:0c.0, compute capability: 8.0
+2023-06-25 03:54:53.930520: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:53.932789: I external/org_tensorflow/tensorflow/core/common_runtime/gpu/gpu_device.cc:1635] Created device /job:localhost/replica:0/task:0/device:GPU:6 with 79149 MB memory:  -> device: 6, name: NVIDIA A100-SXM4-80GB, pci bus id: 0000:00:0d.0, compute capability: 8.0
+2023-06-25 03:54:53.933311: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_gpu_executor.cc:996] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2023-06-25 03:54:53.935589: I external/org_tensorflow/tensorflow/core/common_runtime/gpu/gpu_device.cc:1635] Created device /job:localhost/replica:0/task:0/device:GPU:7 with 79149 MB memory:  -> device: 7, name: NVIDIA A100-SXM4-80GB, pci bus id: 0000:00:0e.0, compute capability: 8.0
+2023-06-25 03:54:53.976928: I mlir/disc/tests/mlir_test.cc:467] --- TF Execution uses: 22.847 ms
+2023-06-25 03:54:53.976954: I mlir/disc/tests/mlir_test.cc:474] 	output shape #0: [100,13]
+2023-06-25 03:54:53.977276: I mlir/disc/tests/mlir_test.cc:467] --- TF Execution uses: 0.314 ms
+2023-06-25 03:54:53.977281: I mlir/disc/tests/mlir_test.cc:474] 	output shape #0: [100,13]
+2023-06-25 03:54:53.977634: I mlir/disc/tests/mlir_test.cc:467] --- TF Execution uses: 0.348 ms
+2023-06-25 03:54:53.977638: I mlir/disc/tests/mlir_test.cc:474] 	output shape #0: [100,13]
+2023-06-25 03:54:53.977984: I mlir/disc/tests/mlir_test.cc:467] --- TF Execution uses: 0.341 ms
+2023-06-25 03:54:53.977988: I mlir/disc/tests/mlir_test.cc:474] 	output shape #0: [100,13]
+2023-06-25 03:54:53.978224: I mlir/disc/tests/mlir_test.cc:467] --- TF Execution uses: 0.232 ms
+2023-06-25 03:54:53.978228: I mlir/disc/tests/mlir_test.cc:474] 	output shape #0: [100,13]
+2023-06-25 03:54:53.978238: I mlir/disc/tests/mlir_test.cc:484] processing output 0
+2023-06-25 03:54:53.979839: I ./mlir/disc/tests/mlir_feature_test.h:37] Unset env setting:
+[       OK ] TFMaxOpTest.ColReduceFullyDynamicShape3DF32 (4793 ms)
+[----------] 1 test from TFMaxOpTest (4793 ms total)
 
 [----------] Global test environment tear-down
-[==========] 1 test from 1 test suite ran. (4889 ms total)
+[==========] 1 test from 1 test suite ran. (4794 ms total)
 [  PASSED  ] 1 test.

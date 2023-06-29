@@ -753,8 +753,9 @@ Value createSharedMemory(OpBuilder& b, Location loc, int64_t size,
 //       accum = init_value;
 //       for (int l = 0; l < var_tile_h; ++l) {
 //         row_index = (thread_row_index  + block_row_index * num_threads_row) *
-//         var_tile_h + l; is_row_valid = row_index < var_rows; if
-//         (is_row_valid) {
+//         var_tile_h + l; 
+//         is_row_valid = row_index < var_rows; 
+//         if(is_row_valid) {
 //           accum = accum + global[row_index, col_index];
 //         } else {
 //           accum = accum;
@@ -794,16 +795,11 @@ LogicalResult lowerWithScheduleColReductionTileH(
       [](Operation* operation) { return isRank2ColReduction(operation); });
 
   Value lhs = *dominant_op->getOperands().begin();
-  // const int kThreads_col = THREADS_COL;  // 32
-  // const int kThreads_row = THREADS_ROW;  // 8
-  // const int kTileH = TILE_H;        // 64
-  // const int kTileRow = kThreads_row * TILE_H; //512
-  // const int kThreads = kThreads_col * kThreads_row; //256
-  const int kThreads_col = 32;  // 32
-  const int kThreads_row = 8;   // 8
-  const int kTileH = 64;        // 64
-  const int kTileRow = 512;     // 512
-  const int kThreads = 256;     // 256
+  const int kThreads_col = THREADS_COL;  // 32
+  const int kThreads_row = THREADS_ROW;  // 8
+  const int kTileH = TILE_H;        // 64
+  const int kTileRow = kThreads_row * TILE_H; //512
+  const int kThreads = kThreads_col * kThreads_row; //256
 
   Location loc = dominant_op->getLoc();
   OpBuilder b(root_ops.back());
@@ -890,7 +886,6 @@ LogicalResult lowerWithScheduleColReductionTileH(
     shared_mem_map[root_op] = shared_mem;
   }
 
-  // is_col_valid = col_index < var_cols;
   Value is_lt_cols = b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ult,
                                              col_index, var_cols);
   scf::IfOp if_col_valid_op =
@@ -898,8 +893,8 @@ LogicalResult lowerWithScheduleColReductionTileH(
                           /*hasElseRegion*/ true);
   if_col_valid_op.getThenRegion().front().clear();
   if_col_valid_op.getElseRegion().front().clear();
-  //     if (is_col_valid) {
   b.setInsertionPointToStart(&if_col_valid_op.getThenRegion().front());
+  //     if (is_col_valid) {
   //       for (int l = 0; l < var_tile_h; ++l) {
   //         row_index = (thread_row_index + block_row_index * num_threads_row)
   //         * var_tile_h + l; is_row_valid = row_index < var_rows; if
@@ -943,12 +938,6 @@ LogicalResult lowerWithScheduleColReductionTileH(
           loc, &b, root_op, *lhs, load_index, b.saveInsertionPoint());
       auto acc = (accum_factory[col_red_root_op_idx])(
           *(for_op_l.getRegionIterArgs().begin() + col_red_root_op_idx), data);
-      // Operation* map_op = getMapOpInReduceRegion(root_op);
-      // assert(map_op && "not supported reduce");
-      // auto acc = emitReduceMapOp(
-      //     b, loc, map_op,
-      //     *(for_op_l.getRegionIterArgs().begin() + col_red_root_op_idx),
-      //     data);
       yield_values_for_if.push_back(acc);
       col_red_root_op_idx++;
     } else if (isRank2RowReduction(root_op)) {
@@ -1068,6 +1057,10 @@ LogicalResult lowerWithScheduleColReductionTileH(
 
   // remove the root_op if it has no other users except the memref
   cleanUnusedLhloOps(parent);
+
+  // auto fusion = dominant_op->getParentOfType<lmhlo::FusionOp>();
+  // llvm::errs() << "fusion after lowering\n";
+  // fusion.dump();
   return success();
 }
 
@@ -4190,37 +4183,39 @@ LogicalResult HandleGpuFusionOp(OpBuilder& b, Operation* fusion,
       llvm::errs() << "kColReduction <" << kname << ">, use_new: " << use_new
                    << " schedule_hint: " << col_reduction_schedule << "\n";
       LogicalResult r = success();
-      if (col_reduction_schedule == DISC_TILE_W8_H32) {
-        if (use_new) {
-          r = lowerWithScheduleColReductionForRocm<16, 32>(
-              root_ops, dominant_op, fused_block, loop, core_count);
-        } else {
-          r = lowerWithScheduleColReductionBlockTileSchedule<8, 32>(
-              root_ops, dominant_op, fused_block);
-        }
-      } else if (col_reduction_schedule == DISC_TILE_W8_H16) {
-        if (use_new) {
-          r = lowerWithScheduleColReductionForRocm<16, 32>(
-              root_ops, dominant_op, fused_block, loop, core_count);
-        } else {
-          r = lowerWithScheduleColReductionBlockTileSchedule<8, 16>(
-              root_ops, dominant_op, fused_block);
-        }
-        // } else if (col_reduction_schedule == DISC_TILE_LOOP_W64_H8) {
-        //   r = lowerWithScheduleColReductionForRocm<64, 8>(
-        //       root_ops, dominant_op, fused_block, loop, core_count);
-        // } else if (col_reduction_schedule == DISC_TILE_LOOP_W16_H32) {
-        //   r = lowerWithScheduleColReductionForRocm<16, 32>(
-        //       root_ops, dominant_op, fused_block, loop, core_count);
-        // } else if (col_reduction_schedule == DISC_TILE_LOOP_W8_H8) {
-        //   r = lowerWithScheduleColReductionForRocm<8, 8>(
-        //       root_ops, dominant_op, fused_block, loop, core_count);
-      } else {
-        r = lowerWithScheduleColReductionTileH<32, 8, 64>(root_ops, dominant_op,
-                                                          fused_block);
-        // r = lowerWithScheduleColReduction<512, 32>(
-        //     root_ops, dominant_op,fused_block);
-      }
+      // if (col_reduction_schedule == DISC_TILE_W8_H32) {
+      //   if (use_new) {
+      //     r = lowerWithScheduleColReductionForRocm<16, 32>(
+      //         root_ops, dominant_op, fused_block, loop, core_count);
+      //   } else {
+      //     r = lowerWithScheduleColReductionBlockTileSchedule<8, 32>(
+      //         root_ops, dominant_op, fused_block);
+      //   }
+      // } else if (col_reduction_schedule == DISC_TILE_W8_H16) {
+      //   if (use_new) {
+      //     r = lowerWithScheduleColReductionForRocm<16, 32>(
+      //         root_ops, dominant_op, fused_block, loop, core_count);
+      //   } else {
+      //     r = lowerWithScheduleColReductionBlockTileSchedule<8, 16>(
+      //         root_ops, dominant_op, fused_block);
+      //   }
+      //   // } else if (col_reduction_schedule == DISC_TILE_LOOP_W64_H8) {
+      //   //   r = lowerWithScheduleColReductionForRocm<64, 8>(
+      //   //       root_ops, dominant_op, fused_block, loop, core_count);
+      //   // } else if (col_reduction_schedule == DISC_TILE_LOOP_W16_H32) {
+      //   //   r = lowerWithScheduleColReductionForRocm<16, 32>(
+      //   //       root_ops, dominant_op, fused_block, loop, core_count);
+      //   // } else if (col_reduction_schedule == DISC_TILE_LOOP_W8_H8) {
+      //   //   r = lowerWithScheduleColReductionForRocm<8, 8>(
+      //   //       root_ops, dominant_op, fused_block, loop, core_count);
+      // } else {
+      //   r = lowerWithScheduleColReductionBlockTileSchedule<8, 8>(
+      //       root_ops, dominant_op, fused_block);
+      // }
+      // r = lowerWithScheduleColReductionTileH<32, 8, 64>(root_ops, dominant_op,
+      //                                                     fused_block);
+      r = lowerWithScheduleColReduction<512, 32>(
+            root_ops, dominant_op,fused_block);
       if (failed(r)) {
         return dominant_op->emitError()
                << "failed to lower col-reduction loops";
