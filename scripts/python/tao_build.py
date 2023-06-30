@@ -345,7 +345,7 @@ def test_tao_compiler(root, args):
     BAZEL_BUILD_CMD = "bazel build --verbose_failures --experimental_multi_threaded_digest --define framework_shared_object=false --test_timeout=600 --javabase=@bazel_tools//tools/jdk:remote_jdk11"
     BAZEL_TEST_CMD = "bazel test --experimental_multi_threaded_digest --define framework_shared_object=false --test_timeout=600 --javabase=@bazel_tools//tools/jdk:remote_jdk11"
     BAZEL_TEST_CMD += ci_build_flag()
-    # BAZEL_TEST_CMD += " --run_under='nsys profile --stats=true -w true -t cuda,nvtx,osrt,cudnn,cublas'"
+    BAZEL_TEST_CMD += " --run_under='nsys profile --stats=true -w true -t cuda,nvtx,osrt,cudnn,cublas'"
     BAZEL_BUILD_CMD += ci_build_flag()
     if running_on_ci():
         # NOTE: using the lower parallel jobs on CI host to avoid OOM

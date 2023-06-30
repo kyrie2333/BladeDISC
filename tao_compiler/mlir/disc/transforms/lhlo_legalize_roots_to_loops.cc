@@ -734,18 +734,18 @@ Value createSharedMemory(OpBuilder& b, Location loc, int64_t size,
 // BLOCK TILE LOOP IMPL: block_x * block_y threads load block_x * block_y *
 // tile_h elements, each thread reduces tile_h elements from gmem to SHM(block_x
 // * block_y), do reduction in SHM and atomic to gmem var_tile_h = 64;
-// num_threads_col = 32; // blockDim.x
-// num_threads_row = 8; // blockDim.y
+// num_threads_col = 32; 
+// num_threads_row = 8; 
 // var_threads = num_threads_col * num_threads_row;
-// num_blocks_col = ceil(var_cols / num_threads_col); // gridDim.x
-// num_blocks_row = ceil(var_rows / (var_tile_h * num_threads_row)); //
+// num_blocks_col = ceil(var_cols / num_threads_col); 
+// num_blocks_row = ceil(var_rows / (var_tile_h * num_threads_row)); 
 // gridDim.y var_blocks = num_blocks_col * num_blocks_row; for (m = 0; m <
 // var_blocks; ++m) {
 //   for (n = 0; n < var_threads; ++n) {
-//     block_col_index = m % num_blocks_col; // blockIdx.x
-//     block_row_index = m / num_blocks_col; // blockIdx.y
-//     thread_col_index = n % num_threads_col; // threadIdx.x
-//     thread_row_index = n / num_threads_col;  // threadIdx.y
+//     block_col_index = m % num_blocks_col; 
+//     block_row_index = m / num_blocks_col; 
+//     thread_col_index = n % num_threads_col; 
+//     thread_row_index = n / num_threads_col; 
 //     shm_trans_index = thread_col_index * num_threads_row + thread_row_index;
 //     col_index = block_col_index * num_threads_col + thread_col_index;
 //     is_col_valid = col_index < var_cols;
@@ -753,8 +753,8 @@ Value createSharedMemory(OpBuilder& b, Location loc, int64_t size,
 //       accum = init_value;
 //       for (int l = 0; l < var_tile_h; ++l) {
 //         row_index = (thread_row_index  + block_row_index * num_threads_row) *
-//         var_tile_h + l; 
-//         is_row_valid = row_index < var_rows; 
+//         var_tile_h + l;
+//         is_row_valid = row_index < var_rows;
 //         if(is_row_valid) {
 //           accum = accum + global[row_index, col_index];
 //         } else {
@@ -795,42 +795,34 @@ LogicalResult lowerWithScheduleColReductionTileH(
       [](Operation* operation) { return isRank2ColReduction(operation); });
 
   Value lhs = *dominant_op->getOperands().begin();
-  const int kThreads_col = THREADS_COL;  // 32
-  const int kThreads_row = THREADS_ROW;  // 8
-  const int kTileH = TILE_H;        // 64
-  const int kTileRow = kThreads_row * TILE_H; //512
-  const int kThreads = kThreads_col * kThreads_row; //256
+  const int kThreads_col = THREADS_COL;              // 32
+  const int kThreads_row = THREADS_ROW;              // 8
+  const int kTileH = TILE_H;                         // 64
+  const int kTileRow = kThreads_row * TILE_H;        // 512
+  const int kThreads = kThreads_col * kThreads_row;  // 256
 
   Location loc = dominant_op->getLoc();
   OpBuilder b(root_ops.back());
   Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
   Value one = b.create<arith::ConstantIndexOp>(loc, 1);
-  Value var_rows = b.create<memref::DimOp>(loc, lhs, zero);  // 110
-  Value var_cols = b.create<memref::DimOp>(loc, lhs, one);   // 1300
+  Value var_rows = b.create<memref::DimOp>(loc, lhs, zero);  
+  Value var_cols = b.create<memref::DimOp>(loc, lhs, one);  
   // Start to emit.
 
-  // num_threads_col = 32; // blockDim.x
-  // num_threads_row = 8; // blockDim.y
-  // var_threads = num_threads_col * num_threads_row;
-  // num_blocks_col = ceil(var_cols / num_threads_col); // gridDim.x
-  // num_blocks_row = ceil(var_rows / (var_tile_h * num_threads_row)); //
-  // gridDim.y var_blocks = num_blocks_col * num_blocks_row;
-  Value num_threads_col =  // 32
+  Value num_threads_col =  
       b.create<arith::ConstantIndexOp>(loc, kThreads_col);
-  Value num_threads_row =  // 8
+  Value num_threads_row =  
       b.create<arith::ConstantIndexOp>(loc, kThreads_row);
-  Value var_tile_h =  // 64
+  Value var_tile_h =  
       b.create<arith::ConstantIndexOp>(loc, kTileH);
   Value num_tile_row = b.create<arith::ConstantIndexOp>(loc, kTileRow);
-  Value var_threads =  // 256
+  Value var_threads =  
       b.create<arith::ConstantIndexOp>(loc, kThreads);
-  Value num_blocks_col =  // 1300/32=41
+  Value num_blocks_col =  
       b.create<arith::CeilDivUIOp>(loc, var_cols, num_threads_col);
-  // Value num_tile_row = //64*8=512
-  //     b.create<arith::MulIOp>(loc, var_tile_h, num_threads_row);
-  Value num_blocks_row =  // 110/512=1
+  Value num_blocks_row =  
       b.create<arith::CeilDivUIOp>(loc, var_rows, num_tile_row);
-  Value var_blocks =  // 41*1=41
+  Value var_blocks = 
       b.create<arith::MulIOp>(loc, num_blocks_col, num_blocks_row);
 
   // for (m = 0; m < var_blocks; ++m) {
@@ -859,8 +851,8 @@ LogicalResult lowerWithScheduleColReductionTileH(
   }
   // block_row_index = m / num_blocks_col;
   // block_col_index = m % num_blocks_col;
-  // thread_col_index = n % num_threads_col; // threadIdx.x
-  // thread_row_index = n / num_threads_col;  // threadIdx.y
+  // thread_col_index = n % num_threads_col; 
+  // thread_row_index = n / num_threads_col; 
   // shm_trans_index = thread_col_index * num_threads_row + thread_row_index;
   // col_index = block_col_index * num_threads_col + thread_col_index;
   Value block_row_index = b.create<arith::DivUIOp>(loc, var_m, num_blocks_col);
@@ -1057,10 +1049,7 @@ LogicalResult lowerWithScheduleColReductionTileH(
 
   // remove the root_op if it has no other users except the memref
   cleanUnusedLhloOps(parent);
-
-  // auto fusion = dominant_op->getParentOfType<lmhlo::FusionOp>();
-  // llvm::errs() << "fusion after lowering\n";
-  // fusion.dump();
+  
   return success();
 }
 
@@ -4183,39 +4172,56 @@ LogicalResult HandleGpuFusionOp(OpBuilder& b, Operation* fusion,
       llvm::errs() << "kColReduction <" << kname << ">, use_new: " << use_new
                    << " schedule_hint: " << col_reduction_schedule << "\n";
       LogicalResult r = success();
-      // if (col_reduction_schedule == DISC_TILE_W8_H32) {
-      //   if (use_new) {
-      //     r = lowerWithScheduleColReductionForRocm<16, 32>(
-      //         root_ops, dominant_op, fused_block, loop, core_count);
-      //   } else {
-      //     r = lowerWithScheduleColReductionBlockTileSchedule<8, 32>(
-      //         root_ops, dominant_op, fused_block);
-      //   }
-      // } else if (col_reduction_schedule == DISC_TILE_W8_H16) {
-      //   if (use_new) {
-      //     r = lowerWithScheduleColReductionForRocm<16, 32>(
-      //         root_ops, dominant_op, fused_block, loop, core_count);
-      //   } else {
-      //     r = lowerWithScheduleColReductionBlockTileSchedule<8, 16>(
-      //         root_ops, dominant_op, fused_block);
-      //   }
-      //   // } else if (col_reduction_schedule == DISC_TILE_LOOP_W64_H8) {
-      //   //   r = lowerWithScheduleColReductionForRocm<64, 8>(
-      //   //       root_ops, dominant_op, fused_block, loop, core_count);
-      //   // } else if (col_reduction_schedule == DISC_TILE_LOOP_W16_H32) {
-      //   //   r = lowerWithScheduleColReductionForRocm<16, 32>(
-      //   //       root_ops, dominant_op, fused_block, loop, core_count);
-      //   // } else if (col_reduction_schedule == DISC_TILE_LOOP_W8_H8) {
-      //   //   r = lowerWithScheduleColReductionForRocm<8, 8>(
-      //   //       root_ops, dominant_op, fused_block, loop, core_count);
-      // } else {
-      //   r = lowerWithScheduleColReductionBlockTileSchedule<8, 8>(
-      //       root_ops, dominant_op, fused_block);
-      // }
-      // r = lowerWithScheduleColReductionTileH<32, 8, 64>(root_ops, dominant_op,
-      //                                                     fused_block);
-      r = lowerWithScheduleColReduction<512, 32>(
-            root_ops, dominant_op,fused_block);
+      #if 0
+      if (col_reduction_schedule == DISC_TILE_W8_H32) {
+        if (use_new) {
+          r = lowerWithScheduleColReductionForRocm<16, 32>(
+              root_ops, dominant_op, fused_block, loop, core_count);
+        } else {
+          r = lowerWithScheduleColReductionBlockTileSchedule<8, 32>(
+              root_ops, dominant_op, fused_block);
+        }
+      } else if (col_reduction_schedule == DISC_TILE_W8_H16) {
+        if (use_new) {
+          r = lowerWithScheduleColReductionForRocm<16, 32>(
+              root_ops, dominant_op, fused_block, loop, core_count);
+        } else {
+          r = lowerWithScheduleColReductionBlockTileSchedule<8, 16>(
+              root_ops, dominant_op, fused_block);
+        }
+        // } else if (col_reduction_schedule == DISC_TILE_LOOP_W64_H8) {
+        //   r = lowerWithScheduleColReductionForRocm<64, 8>(
+        //       root_ops, dominant_op, fused_block, loop, core_count);
+        // } else if (col_reduction_schedule == DISC_TILE_LOOP_W16_H32) {
+        //   r = lowerWithScheduleColReductionForRocm<16, 32>(
+        //       root_ops, dominant_op, fused_block, loop, core_count);
+        // } else if (col_reduction_schedule == DISC_TILE_LOOP_W8_H8) {
+        //   r = lowerWithScheduleColReductionForRocm<8, 8>(
+        //       root_ops, dominant_op, fused_block, loop, core_count);
+      } else {
+        r = lowerWithScheduleColReductionBlockTileSchedule<8, 8>(
+            root_ops, dominant_op, fused_block);
+      }
+      #endif
+      #if 0
+      // r = lowerWithScheduleColReduction<512, 32>(root_ops, dominant_op,
+      //                                            fused_block);
+      r = lowerWithScheduleColReductionTileH<32, 8, 64>(root_ops,
+                                            dominant_op, fused_block);
+      #endif
+      #if 1
+      if (col_reduction_schedule == DISC_FLAT) {
+        r = lowerWithScheduleColReduction<512, 32>(root_ops, dominant_op,
+                                                 fused_block);
+      } else if (col_reduction_schedule == DISC_THIN) {
+        r = lowerWithScheduleColReductionTileH<32, 8, 64>(root_ops,
+                                            dominant_op, fused_block);
+      } else {
+        r = lowerWithScheduleColReduction<512, 32>(root_ops, dominant_op,
+                                                 fused_block);
+      }
+      #endif
+      
       if (failed(r)) {
         return dominant_op->emitError()
                << "failed to lower col-reduction loops";
