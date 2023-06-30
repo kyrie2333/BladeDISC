@@ -734,18 +734,18 @@ Value createSharedMemory(OpBuilder& b, Location loc, int64_t size,
 // BLOCK TILE LOOP IMPL: block_x * block_y threads load block_x * block_y *
 // tile_h elements, each thread reduces tile_h elements from gmem to SHM(block_x
 // * block_y), do reduction in SHM and atomic to gmem var_tile_h = 64;
-// num_threads_col = 32; 
-// num_threads_row = 8; 
+// num_threads_col = 32;
+// num_threads_row = 8;
 // var_threads = num_threads_col * num_threads_row;
-// num_blocks_col = ceil(var_cols / num_threads_col); 
-// num_blocks_row = ceil(var_rows / (var_tile_h * num_threads_row)); 
+// num_blocks_col = ceil(var_cols / num_threads_col);
+// num_blocks_row = ceil(var_rows / (var_tile_h * num_threads_row));
 // gridDim.y var_blocks = num_blocks_col * num_blocks_row; for (m = 0; m <
 // var_blocks; ++m) {
 //   for (n = 0; n < var_threads; ++n) {
-//     block_col_index = m % num_blocks_col; 
-//     block_row_index = m / num_blocks_col; 
-//     thread_col_index = n % num_threads_col; 
-//     thread_row_index = n / num_threads_col; 
+//     block_col_index = m % num_blocks_col;
+//     block_row_index = m / num_blocks_col;
+//     thread_col_index = n % num_threads_col;
+//     thread_row_index = n / num_threads_col;
 //     shm_trans_index = thread_col_index * num_threads_row + thread_row_index;
 //     col_index = block_col_index * num_threads_col + thread_col_index;
 //     is_col_valid = col_index < var_cols;
@@ -805,24 +805,20 @@ LogicalResult lowerWithScheduleColReductionTileH(
   OpBuilder b(root_ops.back());
   Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
   Value one = b.create<arith::ConstantIndexOp>(loc, 1);
-  Value var_rows = b.create<memref::DimOp>(loc, lhs, zero);  
-  Value var_cols = b.create<memref::DimOp>(loc, lhs, one);  
+  Value var_rows = b.create<memref::DimOp>(loc, lhs, zero);
+  Value var_cols = b.create<memref::DimOp>(loc, lhs, one);
   // Start to emit.
 
-  Value num_threads_col =  
-      b.create<arith::ConstantIndexOp>(loc, kThreads_col);
-  Value num_threads_row =  
-      b.create<arith::ConstantIndexOp>(loc, kThreads_row);
-  Value var_tile_h =  
-      b.create<arith::ConstantIndexOp>(loc, kTileH);
+  Value num_threads_col = b.create<arith::ConstantIndexOp>(loc, kThreads_col);
+  Value num_threads_row = b.create<arith::ConstantIndexOp>(loc, kThreads_row);
+  Value var_tile_h = b.create<arith::ConstantIndexOp>(loc, kTileH);
   Value num_tile_row = b.create<arith::ConstantIndexOp>(loc, kTileRow);
-  Value var_threads =  
-      b.create<arith::ConstantIndexOp>(loc, kThreads);
-  Value num_blocks_col =  
+  Value var_threads = b.create<arith::ConstantIndexOp>(loc, kThreads);
+  Value num_blocks_col =
       b.create<arith::CeilDivUIOp>(loc, var_cols, num_threads_col);
-  Value num_blocks_row =  
+  Value num_blocks_row =
       b.create<arith::CeilDivUIOp>(loc, var_rows, num_tile_row);
-  Value var_blocks = 
+  Value var_blocks =
       b.create<arith::MulIOp>(loc, num_blocks_col, num_blocks_row);
 
   // for (m = 0; m < var_blocks; ++m) {
@@ -851,8 +847,8 @@ LogicalResult lowerWithScheduleColReductionTileH(
   }
   // block_row_index = m / num_blocks_col;
   // block_col_index = m % num_blocks_col;
-  // thread_col_index = n % num_threads_col; 
-  // thread_row_index = n / num_threads_col; 
+  // thread_col_index = n % num_threads_col;
+  // thread_row_index = n / num_threads_col;
   // shm_trans_index = thread_col_index * num_threads_row + thread_row_index;
   // col_index = block_col_index * num_threads_col + thread_col_index;
   Value block_row_index = b.create<arith::DivUIOp>(loc, var_m, num_blocks_col);
@@ -1049,7 +1045,7 @@ LogicalResult lowerWithScheduleColReductionTileH(
 
   // remove the root_op if it has no other users except the memref
   cleanUnusedLhloOps(parent);
-  
+
   return success();
 }
 
@@ -4172,7 +4168,7 @@ LogicalResult HandleGpuFusionOp(OpBuilder& b, Operation* fusion,
       llvm::errs() << "kColReduction <" << kname << ">, use_new: " << use_new
                    << " schedule_hint: " << col_reduction_schedule << "\n";
       LogicalResult r = success();
-      #if 0
+#if 0
       if (col_reduction_schedule == DISC_TILE_W8_H32) {
         if (use_new) {
           r = lowerWithScheduleColReductionForRocm<16, 32>(
@@ -4202,26 +4198,26 @@ LogicalResult HandleGpuFusionOp(OpBuilder& b, Operation* fusion,
         r = lowerWithScheduleColReductionBlockTileSchedule<8, 8>(
             root_ops, dominant_op, fused_block);
       }
-      #endif
-      #if 0
+#endif
+#if 0
       // r = lowerWithScheduleColReduction<512, 32>(root_ops, dominant_op,
       //                                            fused_block);
       r = lowerWithScheduleColReductionTileH<32, 8, 64>(root_ops,
                                             dominant_op, fused_block);
-      #endif
-      #if 1
+#endif
+#if 1
       if (col_reduction_schedule == DISC_FLAT) {
         r = lowerWithScheduleColReduction<512, 32>(root_ops, dominant_op,
-                                                 fused_block);
+                                                   fused_block);
       } else if (col_reduction_schedule == DISC_THIN) {
-        r = lowerWithScheduleColReductionTileH<32, 8, 64>(root_ops,
-                                            dominant_op, fused_block);
+        r = lowerWithScheduleColReductionTileH<32, 8, 64>(root_ops, dominant_op,
+                                                          fused_block);
       } else {
         r = lowerWithScheduleColReduction<512, 32>(root_ops, dominant_op,
-                                                 fused_block);
+                                                   fused_block);
       }
-      #endif
-      
+#endif
+
       if (failed(r)) {
         return dominant_op->emitError()
                << "failed to lower col-reduction loops";
