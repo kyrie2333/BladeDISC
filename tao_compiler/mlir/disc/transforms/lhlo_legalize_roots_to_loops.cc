@@ -4199,12 +4199,6 @@ LogicalResult HandleGpuFusionOp(OpBuilder& b, Operation* fusion,
             root_ops, dominant_op, fused_block);
       }
 #endif
-#if 0
-      // r = lowerWithScheduleColReduction<512, 32>(root_ops, dominant_op,
-      //                                            fused_block);
-      r = lowerWithScheduleColReductionTileH<32, 8, 64>(root_ops,
-                                            dominant_op, fused_block);
-#endif
 #if 1
       if (col_reduction_schedule == DISC_FLAT) {
         r = lowerWithScheduleColReduction<512, 32>(root_ops, dominant_op,
