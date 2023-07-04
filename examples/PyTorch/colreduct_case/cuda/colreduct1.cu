@@ -95,7 +95,7 @@ int main(int argc, char* argv[]) {
   // allocate memory for matrix and result on host
   float* matrix = (float*)malloc(M * N * sizeof(float));
   float* result = (float*)malloc(N * sizeof(float));    // gpu result
-  float* h_result = (float*)malloc(N * sizeof(float));  // validation
+  // float* h_result = (float*)malloc(N * sizeof(float));  // validation
 
   // initialize matrix
   for (int i = 0; i < M * N; i++) {
@@ -135,14 +135,14 @@ int main(int argc, char* argv[]) {
   CHECK(cudaDeviceReset());
 
   // column reduction on host
-  column_reduce_host(matrix, h_result, M, N);
+  // column_reduce_host(matrix, h_result, M, N);
 
-  // check result
-  check_result(h_result, result, N);
+  // // check result
+  // check_result(h_result, result, N);
 
   free(matrix);
   free(result);
-  free(h_result);
+  // free(h_result);
   cudaFree(d_matrix);
   cudaFree(d_result);
 

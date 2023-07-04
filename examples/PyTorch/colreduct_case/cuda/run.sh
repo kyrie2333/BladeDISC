@@ -16,6 +16,6 @@ CUDA_VISIBLE_DEVICES=4 nsys profile -f true --stats=true -o ${FILE} ./${FILE} 51
 # -f --set full --rule SOLBottleneck --target-processes all \
 #  ./colreduct2
 
-# nohup python3 profile_schedule_bk1.py > profile_schedule_bk1_1.log 2>&1 &
+nohup python3 profile_schedule_bk1.py > profile_schedule_a10.log 2>&1 &
 # nohup python3 profile_schedule_bk2.py > profile_schedule_bk2.log 2>&1 &
-nohup  python3 compare_schedule_disc.py > compare_schedule_disc.log 2>&1 &
+nohup  python3 compare_schedule_disc.py > compare_schedule_disc_a10.log 2>&1 &
