@@ -1,0 +1,143 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //mlir/disc/transforms/tests:gpu-only-lhlo-legalize-roots-to-loops.mlir.test
+-----------------------------------------------------------------------------
+-- Testing: 1 tests, 1 workers --
+FAIL: MLIR tests :: gpu-only-lhlo-legalize-roots-to-loops.mlir (1 of 1)
+******************** TEST 'MLIR tests :: gpu-only-lhlo-legalize-roots-to-loops.mlir' FAILED ********************
+Script:
+--
+: 'RUN: at line 1';   DISC_ENABLE_SHAPE_CONSTRAINT_IR=0 DISC_ENABLE_HORIZONTAL_FUSION=0 /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/bazel-out/k8-opt/bin/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops.mlir.test.runfiles/org_disc_compiler/mlir/disc/disc-opt /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/bazel-out/k8-opt/bin/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops.mlir.test.runfiles/org_disc_compiler/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops.mlir -disc-lhlo-legalize-roots-to-parallel-loops -split-input-file | /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/bazel-out/k8-opt/bin/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops.mlir.test.runfiles/llvm-project/llvm/FileCheck /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/bazel-out/k8-opt/bin/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops.mlir.test.runfiles/org_disc_compiler/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops.mlir
+: 'RUN: at line 2';   DISC_ENABLE_SHAPE_CONSTRAINT_IR=0 DISC_ENABLE_HORIZONTAL_FUSION=0 DISC_MEM_INTENSIVE_OPT_EXPERIMENTAL=true /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/bazel-out/k8-opt/bin/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops.mlir.test.runfiles/org_disc_compiler/mlir/disc/disc-opt    /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/bazel-out/k8-opt/bin/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops.mlir.test.runfiles/org_disc_compiler/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops.mlir -disc-lhlo-legalize-roots-to-parallel-loops -split-input-file |    /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/bazel-out/k8-opt/bin/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops.mlir.test.runfiles/llvm-project/llvm/FileCheck /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/bazel-out/k8-opt/bin/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops.mlir.test.runfiles/org_disc_compiler/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops.mlir --check-prefix=MEMOPT
+--
+Exit Code: 1
+
+Command Output (stderr):
+--
+cpu-no-fusion-op: 
+cpu-no-fusion-op: 
+cpu-no-fusion-op: 
+""llmmhhlloo..asdldi"(ce"(%"cpu-no-fusion-op: 
+%lmhlo.broadarg0c, aarg0%, sarg1%t)"arg1(, %%arg2arg0), %arg1) {broadcast_sizes =  : ( {dense<memref<limit_indices = ?"x3dense<>l?x-1? : >cpu-no-fusion-op: 
+mxhtensor<l : of321.xtensor<ri>264, x>iememref<s}64?h : >cpu-no-fusion-op: 
+xa(p, ?start_indicesmemref<e?x = ""x?dense<(lf32mx[>%hf32arg05, , l>, memref<%36o, arg1memref<x?].)?x>?tx : "x : f32tensor<r?(l>2) -> axmmemref<hx(in)f32cpu-no-fusion-op: 
+?l64s>x) -> 
+o>p?o().parallel_loop: d
+, yxparallel_loop: s00stridesn = f32e
+"
+adense<>lower with lowerWithScheduleLoop
+(, lower with lowerWithScheduleLoop
+m[%7memref<iarg0, , ?cx_48%]arg1pxa>)f32d : " {(>tensor<) -> %permutation2 = (arg0)"xldense<, 
+%im[parallel_loop: arg1264h>0, , %l}o : cpu-no-fusion-op: 
+
+1arg2.(lower with lowerWithScheduleLoop
+, , imemref<cpu-no-fusion-op: 
+0%]s?xarg3, %>_?arg4 : fx, tensor<if32n3%i>txarg5e)i" : , 64memref<>?x((cpu-no-fusion-op: 
+}% : arg0?memref<x(, ?f32xmemref<%?x>?arg1?)) -> xx??( : xx)(f32f32memref<
+>>, ?memref<x?parallel_loop: x, f32?0memref<>x?
+x, ?f32lower with lowerWithScheduleLoop
+memref<x>3, x"?memref<i?lxx32m>?f32h, x>lmemref<?) -> o(3xx.i)ic1
+32parallel_loop: o0
+>>nlower with lowerWithScheduleLoop
+) -> , c(memref<a)3tx
+ein32parallel_loop: a>t0, e"
+memref<"l(lower with lowerWithScheduleLoop
+m?"%xlharg0?, %marg1lxoh, ?lxo.f32%.g>a) -> arg2tdh(y), en%a
+rarg3"mparallel_loop: )cpu-no-fusion-op: 
+ {(i0%arg0dimensionc = 
+, lower with lowerWithScheduleLoop
+1%_ : arg1gia, 64t%}harg2 : )e(rmemref< {"dimension_numbers?( = x%?arg0x, f32%arg1>, , %"arg2, memref<%l?arg3xm)cpu-no-fusion-op: 
+h?l {ox.dimension_numbersf32c = o#>pmhloy, ."memref<(?xgather<collapsed_slice_dims = [0], start_index_map = [0], index_vector_dim = 1>%?, xarg0indices_are_sortedf32, # = mhlo>%, falsememref<.arg1, )?gather<offset_dims = [2], collapsed_slice_dims = [0], start_index_map = [0], index_vector_dim = 2> : slice_sizes,  = xindices_are_sorted?( = dense<xmemref<false?1f32x}>>? : x : ?) -> (tensor<x(memref<1f32x)?i>x
+, parallel_loop: 64?"memref<l0>mx?
+}hf32lxlower with lowerWithScheduleLoop
+o?>. : x, r(e?memref<dmemref<xu3?f32cx>xi) -> (ecpu-no-fusion-op: 
+?32)"x>(i, %
+32memref<arg0parallel_loop: >2, x0, %i
+memref<arg1kColReduction <32lower with lowerWithScheduleLoop
+main_kColReduction_reduce__4_1_0>2>, use_new: , , %xkColReduction <i0memref<32arg2>)main_kColReduction_reduce__4_1_0 schedule_hint: >, use_new: 72
+,  ("0xmemref<{l schedule_hint: m8i?32
+h
+^bb0x>l(?) -> %ox(arg3.?): dxmemref<y
+nf32aparallel_loop: >f32m0) -> >i
+c(_)i, 
+lower with lowerWithScheduleLoop
+o%parallel_loop: targ40: a
+memref<"lower with lowerWithScheduleLoop
+f32(>%, arg0%, arg5%: arg1memref<f32)>) {:
+iota_dimension =   %1alloc =  : i64memref.alloc}( : )( {memref<temp2 = xitrue32} >:,  memref<memref<?f32x>?xi32>) -> ()
+
+  parallel_loop: "0l
+mlower with lowerWithScheduleLoop
+hlo.add"(%arg3, %arg4, %alloc) : (memref<f32>, memref<f32>, memref<f32>) -> ()
+  "lmhlo.copy"(%alloc, %arg5) : (memref<f32>, memref<f32>) -> ()
+  memref.dealloc %alloc : memref<f32>
+  "lmhlo.terminator"() : () -> ()
+}) {dimensions = dense<1> : tensor<1xi64>} : (memref<?x?x?xf32>, memref<f32>, memref<?x?xf32>) -> ()
+parallel_loop: 0
+lower with lowerWithScheduleLoop
+/root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/bazel-out/k8-opt/bin/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops.mlir.test.runfiles/org_disc_compiler/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops.mlir:300:16: error: CHECK-DAG: expected string not found in input
+ // CHECK-DAG: %[[BLKS_PER_ROW:.*]] = arith.ceildivsi %[[ROWS]], %[[C512]] : index
+               ^
+<stdin>:743:50: note: scanning from here
+ %dim_1 = memref.dim %arg1, %c1 : memref<?x?xf32>
+                                                 ^
+<stdin>:743:50: note: with "ROWS" equal to "dim_0"
+ %dim_1 = memref.dim %arg1, %c1 : memref<?x?xf32>
+                                                 ^
+<stdin>:743:50: note: with "C512" equal to "c512"
+ %dim_1 = memref.dim %arg1, %c1 : memref<?x?xf32>
+                                                 ^
+<stdin>:746:2: note: possible intended match here
+ %2 = arith.muli %0, %1 : index
+ ^
+
+Input file: <stdin>
+Check file: /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/bazel-out/k8-opt/bin/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops.mlir.test.runfiles/org_disc_compiler/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops.mlir
+
+-dump-input=help explains the following input dump.
+
+Input was:
+<<<<<<
+           .
+           .
+           .
+         738:  %4 = memref.load %arg3[] : memref<f32> 
+         739:  memref.store %4, %arg2[%3] : memref<?xf32> 
+         740:  scf.yield 
+         741:  } 
+         742:  %dim_0 = memref.dim %arg1, %c0 : memref<?x?xf32> 
+         743:  %dim_1 = memref.dim %arg1, %c1 : memref<?x?xf32> 
+dag:300'0                                                      X error: no match found
+dag:300'1                                                        with "ROWS" equal to "dim_0"
+dag:300'2                                                        with "C512" equal to "c512"
+         744:  %0 = arith.ceildivui %dim_1, %c32 : index 
+dag:300'0     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+         745:  %1 = arith.ceildivui %dim_0, %c512 : index 
+dag:300'0     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+         746:  %2 = arith.muli %0, %1 : index 
+dag:300'0     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+dag:300'3      ?                               possible intended match
+         747:  scf.parallel (%arg4, %arg5) = (%c0, %c0) to (%2, %c256) step (%c1, %c1) { 
+dag:300'0     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+         748:  %3 = memref.load %arg3[] : memref<f32> 
+dag:300'0     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+         749:  %4 = arith.divui %arg4, %0 : index 
+dag:300'0     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+         750:  %5 = arith.remui %arg4, %0 : index 
+dag:300'0     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+         751:  %6 = arith.divui %arg5, %c32 : index 
+dag:300'0     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+           .
+           .
+           .
+>>>>>>
+
+--
+
+********************
+********************
+Failed Tests (1):
+  MLIR tests :: gpu-only-lhlo-legalize-roots-to-loops.mlir
+
+
+Testing Time: 0.05s
+  Failed: 1

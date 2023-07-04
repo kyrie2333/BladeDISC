@@ -495,16 +495,43 @@ struct DiscSpecializeFusionWithSpeculationPass
     Value operand = reduce_op->getOperand(0);
     Value row_size = b.create<memref::DimOp>(loc, operand, 0);
     Value col_size = b.create<memref::DimOp>(loc, operand, 1);
-    Value matrix_size = b.create<arith::MulIOp>(loc, row_size, col_size);
-    int thread_per_block = kThreadsRowReduction;
-    Value cur_threads = b.create<arith::ConstantIndexOp>(loc, thread_per_block);
+    // Value matrix_size = b.create<arith::MulIOp>(loc, row_size, col_size);
+    // int thread_per_block = kThreadsRowReduction;  // default 256
+    // Value cur_threads = b.create<arith::ConstantIndexOp>(loc, thread_per_block);
     // b.create<arith::ConstantIndexOp>(loc, max_threads_per_block_);
-    Value cur_blocks =
-        b.create<arith::CeilDivSIOp>(loc, matrix_size, cur_threads);
-    Value ref_blocks = b.create<arith::ConstantIndexOp>(loc, core_count_);
+    // Value cur_blocks =
+    //     b.create<arith::CeilDivSIOp>(loc, matrix_size, cur_threads);
+    // Value ref_blocks = b.create<arith::ConstantIndexOp>(loc, core_count_);  // SM
 
+    // Col reduction schedule selection policy:
+    // when the shape of matrix is flat(row < col), we use the first schedule.
+    // Otherwise, we use the second schedule. The conditions are as follows:
+    //   1. row < col
+    //   2. row >= col
+    Value pred = b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::slt,
+                                         row_size, col_size);
+    auto if_op = b.create<scf::IfOp>(loc, llvm::None, pred, true);
+
+    auto first_schedule = b.getIntegerAttr(b.getIntegerType(32), 7);
+    auto second_schedule = b.getIntegerAttr(b.getIntegerType(32), 8);
+    // The block-size is 256 in the second schedule.
+    auto num_thread_full_attr256 =
+        b.getIntegerAttr(b.getIntegerType(32), kThreadsRowReduction);
+    // The block-size is 512 in the first schedule.
+    auto num_thread_full_attr512 =
+        b.getIntegerAttr(b.getIntegerType(32), kThreadsRowReduction512);
+    fusion_op->setAttr(kThreadPerBlockHint, num_thread_full_attr512);
+    fusion_op->setAttr(kColReductionScheduleHint, first_schedule);
+    // use fisrt schedule if row_size < col_size
+    addFusionTag(b, fusion_op, "flat");
+    cloned->setAttr(kThreadPerBlockHint, num_thread_full_attr256);
+    cloned->setAttr(kColReductionScheduleHint, second_schedule);
+    // use second schedule if row_size >= col_size
+    addFusionTag(b, cloned, "thin");
+
+#if 0
     Value pred = b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sgt,
-                                         cur_blocks, ref_blocks);
+                                         cur_blocks, ref_blocks); 
 
     auto if_op = b.create<scf::IfOp>(loc, llvm::None, pred, true);
 
@@ -516,14 +543,15 @@ struct DiscSpecializeFusionWithSpeculationPass
         b.getIntegerAttr(b.getIntegerType(32), kThreadsRowReduction);
     auto num_thread_half_attr =
         b.getIntegerAttr(b.getIntegerType(32), kThreadsRowReduction / 2);
-    fusion_op->setAttr(kThreadPerBlockHint, num_thread_full_attr);
+    fusion_op->setAttr(kThreadPerBlockHint, num_thread_full_attr); 
     fusion_op->setAttr(kColReductionScheduleHint, w8_h32_schedule);
     // use 8*32 tile if block# >= SM#
     addFusionTag(b, fusion_op, "8w32h");
-    cloned->setAttr(kThreadPerBlockHint, num_thread_half_attr);
+    cloned->setAttr(kThreadPerBlockHint, num_thread_half_attr); 
     cloned->setAttr(kColReductionScheduleHint, w8_h16_schedule);
     // one 8*16 tile if block# < SM#
     addFusionTag(b, cloned, "8w16h");
+#endif
 
     Block* then_block = &if_op.getThenRegion().getBlocks().front();
     Block* else_block = &if_op.getElseRegion().getBlocks().front();

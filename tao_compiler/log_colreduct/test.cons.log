@@ -1,0 +1,427 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //mlir/disc/transforms/tests:gpu-only-lhlo-legalize-roots-to-loops-shape-constraint.mlir.test
+-----------------------------------------------------------------------------
+-- Testing: 1 tests, 1 workers --
+FAIL: MLIR tests :: gpu-only-lhlo-legalize-roots-to-loops-shape-constraint.mlir (1 of 1)
+******************** TEST 'MLIR tests :: gpu-only-lhlo-legalize-roots-to-loops-shape-constraint.mlir' FAILED ********************
+Script:
+--
+: 'RUN: at line 1';   DISC_ENABLE_SHAPE_CONSTRAINT_IR=1 DISC_ENABLE_HORIZONTAL_FUSION=1 /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/bazel-out/k8-opt/bin/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops-shape-constraint.mlir.test.runfiles/org_disc_compiler/mlir/disc/disc-opt /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/bazel-out/k8-opt/bin/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops-shape-constraint.mlir.test.runfiles/org_disc_compiler/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops-shape-constraint.mlir -disc-lhlo-legalize-roots-to-parallel-loops -split-input-file | /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/bazel-out/k8-opt/bin/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops-shape-constraint.mlir.test.runfiles/llvm-project/llvm/FileCheck /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/bazel-out/k8-opt/bin/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops-shape-constraint.mlir.test.runfiles/org_disc_compiler/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops-shape-constraint.mlir
+: 'RUN: at line 2';   DISC_ENABLE_SHAPE_CONSTRAINT_IR=1 DISC_ENABLE_HORIZONTAL_FUSION=1 DISC_MEM_INTENSIVE_OPT_EXPERIMENTAL=true /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/bazel-out/k8-opt/bin/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops-shape-constraint.mlir.test.runfiles/org_disc_compiler/mlir/disc/disc-opt    /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/bazel-out/k8-opt/bin/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops-shape-constraint.mlir.test.runfiles/org_disc_compiler/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops-shape-constraint.mlir -disc-lhlo-legalize-roots-to-parallel-loops -split-input-file |    /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/bazel-out/k8-opt/bin/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops-shape-constraint.mlir.test.runfiles/llvm-project/llvm/FileCheck /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/bazel-out/k8-opt/bin/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops-shape-constraint.mlir.test.runfiles/org_disc_compiler/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops-shape-constraint.mlir --check-prefix=MEMOPT
+--
+Exit Code: 1
+
+Command Output (stderr):
+--
+SymbolicDimMgr::save walkRankedTensorValue takes: 1 us
+SymbolicDimMgr::save update attributes takes: 1 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 4 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 1 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 0 us
+SymbolicDimMgr::save replace the name takes: 1 us
+SymbolicDimMgr::save updateFunctionType takes: 0 us
+cpu-no-fusion-op: 
+"lmhlo.add"(%arg0, %arg1, %arg2) : (memref<?x?x?xf32>, memref<?x?x?xf32>, memref<?x?x?xf32>) -> ()
+parallel_loop: 0
+lower with lowerWithScheduleLoop
+SymbolicDimMgr::save walkRankedTensorValue takes: 0 us
+SymbolicDimMgr::save update attributes takes: 0 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 3 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 1 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 0 us
+SymbolicDimMgr::save replace the name takes: 1 us
+SymbolicDimMgr::save updateFunctionType takes: 0 us
+cpu-no-fusion-op: 
+"lmhlo.slice"(%arg0, %arg1) {limit_indices = dense<-1> : tensor<2xi64>, start_indices = dense<[5, 6]> : tensor<2xi64>, strides = dense<[7, 8]> : tensor<2xi64>} : (memref<?x?xf32>, memref<?x?xf32>) -> ()
+parallel_loop: 0
+lower with lowerWithScheduleLoop
+SymbolicDimMgr::save walkRankedTensorValue takes: 0 us
+SymbolicDimMgr::save update attributes takes: 0 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 3 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 1 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 0 us
+SymbolicDimMgr::save replace the name takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 0 us
+cpu-no-fusion-op: 
+"lmhlo.broadcast"(%arg0, %arg1) {broadcast_sizes = dense<3> : tensor<1xi64>} : (memref<?xf32>, memref<3x?xf32>) -> ()
+parallel_loop: 0
+lower with lowerWithScheduleLoop
+SymbolicDimMgr::save walkRankedTensorValue takes: 0 us
+SymbolicDimMgr::save update attributes takes: 0 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 3 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 0 us
+SymbolicDimMgr::save replace the name takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 0 us
+cpu-no-fusion-op: 
+"lmhlo.reshape"(%arg0, %arg1) : (memref<?x?xf32>, memref<?x4xf32>) -> ()
+parallel_loop: 0
+lower with lowerWithScheduleLoop
+SymbolicDimMgr::save walkRankedTensorValue takes: 0 us
+SymbolicDimMgr::save update attributes takes: 0 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 2 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 1 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 0 us
+SymbolicDimMgr::save replace the name takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 0 us
+cpu-no-fusion-op: 
+"lmhlo.transpose"(%arg0, %arg1) {permutation = dense<[2, 1, 0]> : tensor<3xi64>} : (memref<?x?x?xf32>, memref<?x?x?xf32>) -> ()
+parallel_loop: 0
+lower with lowerWithScheduleLoop
+SymbolicDimMgr::save walkRankedTensorValue takes: 0 us
+SymbolicDimMgr::save update attributes takes: 0 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 13 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 1 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 0 us
+SymbolicDimMgr::save replace the name takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 0 us
+cpu-no-fusion-op: 
+"lmhlo.dynamic_pad"(%arg0, %arg1, %arg2, %arg3, %arg4, %arg5) : (memref<?x?x?xf32>, memref<f32>, memref<3xi32>, memref<3xi32>, memref<3xi32>, memref<?x?x?xf32>) -> ()
+parallel_loop: 0
+lower with lowerWithScheduleLoop
+SymbolicDimMgr::save walkRankedTensorValue takes: 1 us
+SymbolicDimMgr::save update attributes takes: 1 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 3 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 2 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 0 us
+SymbolicDimMgr::save replace the name takes: 1 us
+SymbolicDimMgr::save updateFunctionType takes: 0 us
+cpu-no-fusion-op: 
+"lmhlo.is_finite"(%arg0, %arg1) : (memref<?x?x?xf32>, memref<?x?x?xi1>) -> ()
+parallel_loop: 0
+lower with lowerWithScheduleLoop
+SymbolicDimMgr::save walkRankedTensorValue takes: 0 us
+SymbolicDimMgr::save update attributes takes: 0 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 2 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 1 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 0 us
+SymbolicDimMgr::save replace the name takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 0 us
+cpu-no-fusion-op: 
+"lmhlo.gather"(%arg0, %arg1, %arg2) {dimension_numbers = #mhlo.gather<collapsed_slice_dims = [0], start_index_map = [0], index_vector_dim = 1>, indices_are_sorted = false, slice_sizes = dense<1> : tensor<1xi64>} : (memref<3xi32>, memref<2xi32>, memref<2xi32>) -> ()
+parallel_loop: 0
+lower with lowerWithScheduleLoop
+SymbolicDimMgr::save walkRankedTensorValue takes: 0 us
+SymbolicDimMgr::save update attributes takes: 0 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 3 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 1 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 0 us
+SymbolicDimMgr::save replace the name takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 0 us
+cpu-no-fusion-op: 
+"lmhlo.dynamic_gather"(%arg0, %arg1, %arg2, %arg3) {dimension_numbers = #mhlo.gather<offset_dims = [2], collapsed_slice_dims = [0], start_index_map = [0], index_vector_dim = 2>, indices_are_sorted = false} : (memref<?x?xf32>, memref<?x?xi32>, memref<2xi32>, memref<?x?x?xf32>) -> ()
+parallel_loop: 0
+lower with lowerWithScheduleLoop
+SymbolicDimMgr::save walkRankedTensorValue takes: 0 us
+SymbolicDimMgr::save update attributes takes: 0 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 2 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 1 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 0 us
+SymbolicDimMgr::save replace the name takes: 1 us
+SymbolicDimMgr::save updateFunctionType takes: 0 us
+cpu-no-fusion-op: 
+"lmhlo.concatenate"(%arg0, %arg1, %arg2, %arg3) {dimension = 1 : i64} : (memref<?x?xf32>, memref<?x?xf32>, memref<?x?xf32>, memref<?x?xf32>) -> ()
+parallel_loop: 0
+lower with lowerWithScheduleLoop
+SymbolicDimMgr::save walkRankedTensorValue takes: 1 us
+SymbolicDimMgr::save update attributes takes: 0 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 3 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 1 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 0 us
+SymbolicDimMgr::save replace the name takes: 1 us
+SymbolicDimMgr::save updateFunctionType takes: 0 us
+cpu-no-fusion-op: 
+"lmhlo.copy"(%arg0, %arg1) : (memref<?x?x?xf32>, memref<?x?x?xf32>) -> ()
+parallel_loop: 0
+lower with lowerWithScheduleLoop
+SymbolicDimMgr::save walkRankedTensorValue takes: 0 us
+SymbolicDimMgr::save update attributes takes: 0 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 2 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 1 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 0 us
+SymbolicDimMgr::save replace the name takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 0 us
+cpu-no-fusion-op: 
+"lmhlo.reduce"(%arg0, %arg1, %arg2) ({
+^bb0(%arg3: memref<f32>, %arg4: memref<f32>, %arg5: memref<f32>):
+  %alloc = memref.alloc() {temp = true} : memref<f32>
+  "lmhlo.add"(%arg3, %arg4, %alloc) : (memref<f32>, memref<f32>, memref<f32>) -> ()
+  "lmhlo.copy"(%alloc, %arg5) : (memref<f32>, memref<f32>) -> ()
+  memref.dealloc %alloc : memref<f32>
+  "lmhlo.terminator"() : () -> ()
+}) {dimensions = dense<1> : tensor<1xi64>} : (memref<?x?x?xf32>, memref<f32>, memref<?x?xf32>) -> ()
+parallel_loop: 0
+lower with lowerWithScheduleLoop
+SymbolicDimMgr::save walkRankedTensorValue takes: 0 us
+SymbolicDimMgr::save update attributes takes: 0 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 2 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 1 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 0 us
+SymbolicDimMgr::save replace the name takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 0 us
+cpu-no-fusion-op: 
+"lmhlo.dynamic_iota"(%arg0, %arg1) {iota_dimension = 1 : i64} : (memref<2xi32>, memref<?x?xi32>) -> ()
+parallel_loop: 0
+lower with lowerWithScheduleLoop
+SymbolicDimMgr::save walkRankedTensorValue takes: 0 us
+SymbolicDimMgr::save update attributes takes: 0 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 3 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 0 us
+SymbolicDimMgr::save replace the name takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 0 us
+SymbolicDimMgr::save walkRankedTensorValue takes: 0 us
+SymbolicDimMgr::save update attributes takes: 0 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 3 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 1 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 0 us
+SymbolicDimMgr::save replace the name takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 0 us
+SymbolicDimMgr::save walkRankedTensorValue takes: 1 us
+SymbolicDimMgr::save update attributes takes: 0 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 3 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 1 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 0 us
+SymbolicDimMgr::save replace the name takes: 1 us
+SymbolicDimMgr::save updateFunctionType takes: 0 us
+SymbolicDimMgr::save walkRankedTensorValue takes: 1 us
+SymbolicDimMgr::save update attributes takes: 7 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 3 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 4 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 5 us
+SymbolicDimMgr::save replace the name takes: 4 us
+SymbolicDimMgr::save updateFunctionType takes: 1 us
+SymbolicDimMgr::save walkRankedTensorValue takes: 1 us
+SymbolicDimMgr::save update attributes takes: 1 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 3 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 1 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 0 us
+SymbolicDimMgr::save replace the name takes: 1 us
+SymbolicDimMgr::save updateFunctionType takes: 0 us
+kColReduction <simple_kinput_reduce__2_1_0>, use_new: 0 schedule_hint: 7
+SymbolicDimMgr::save walkRankedTensorValue takes: 1 us
+SymbolicDimMgr::save update attributes takes: 1 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 3 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 2 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 0 us
+SymbolicDimMgr::save replace the name takes: 1 us
+SymbolicDimMgr::save updateFunctionType takes: 0 us
+SymbolicDimMgr::save walkRankedTensorValue takes: 1 us
+SymbolicDimMgr::save update attributes takes: 1 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 3 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 2 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 0 us
+SymbolicDimMgr::save replace the name takes: 1 us
+SymbolicDimMgr::save updateFunctionType takes: 0 us
+SymbolicDimMgr::save walkRankedTensorValue takes: 1 us
+SymbolicDimMgr::save update attributes takes: 1 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 3 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 2 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 0 us
+SymbolicDimMgr::save replace the name takes: 2 us
+SymbolicDimMgr::save updateFunctionType takes: 0 us
+SymbolicDimMgr::save walkRankedTensorValue takes: 1 us
+SymbolicDimMgr::save update attributes takes: 1 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 3 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 2 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 0 us
+SymbolicDimMgr::save replace the name takes: 2 us
+SymbolicDimMgr::save updateFunctionType takes: 0 us
+SymbolicDimMgr::save walkRankedTensorValue takes: 2 us
+SymbolicDimMgr::save update attributes takes: 2 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 3 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 3 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 0 us
+SymbolicDimMgr::save replace the name takes: 3 us
+SymbolicDimMgr::save updateFunctionType takes: 1 us
+SymbolicDimMgr::save walkRankedTensorValue takes: 1 us
+SymbolicDimMgr::save update attributes takes: 1 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 3 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 1 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 0 us
+SymbolicDimMgr::save replace the name takes: 1 us
+SymbolicDimMgr::save updateFunctionType takes: 0 us
+SymbolicDimMgr::save walkRankedTensorValue takes: 2 us
+SymbolicDimMgr::save update attributes takes: 6 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 3 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 4 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 3 us
+SymbolicDimMgr::save replace the name takes: 4 us
+SymbolicDimMgr::save updateFunctionType takes: 1 us
+SymbolicDimMgr::save walkRankedTensorValue takes: 1 us
+SymbolicDimMgr::save update attributes takes: 1 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 2 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 2 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 0 us
+SymbolicDimMgr::save replace the name takes: 1 us
+SymbolicDimMgr::save updateFunctionType takes: 0 us
+SymbolicDimMgr::save walkRankedTensorValue takes: 3 us
+SymbolicDimMgr::save update attributes takes: 7 us
+SymbolicDimMgr::save updateProductEqualityMap takes: 0 us
+SymbolicDimMgr::save updateFunctionType takes: 4 us
+SymbolicDimMgr::save collect symbolicDim ops takes: 6 us
+SymbolicDimMgr::save remove symbolicDim ops takes: 0 us
+SymbolicDimMgr::save remove unused production takes: 0 us
+SymbolicDimMgr::save remove unused production #2 takes: 0 us
+SymbolicDimMgr::save canonicalize the name takes: 3 us
+SymbolicDimMgr::save replace the name takes: 6 us
+SymbolicDimMgr::save updateFunctionType takes: 1 us
+/root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/bazel-out/k8-opt/bin/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops-shape-constraint.mlir.test.runfiles/org_disc_compiler/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops-shape-constraint.mlir:278:16: error: CHECK-DAG: expected string not found in input
+ // CHECK-DAG: %[[C256:.*]] = arith.constant 256 : index
+               ^
+<stdin>:661:137: note: scanning from here
+ func.func @kinput_col_reduce(%arg0: memref<?x?xf32>, %arg1: memref<?x?xf32>, %arg2: memref<?xf32>, %arg3: memref<f32>) -> memref<?xf32> {
+                                                                                                                                        ^
+<stdin>:662:2: note: possible intended match here
+ %c32 = arith.constant 32 : index
+ ^
+
+Input file: <stdin>
+Check file: /root/.cache/bazel/_bazel_root/54ece412abe75fa85ab728a2c061e33c/execroot/org_disc_compiler/bazel-out/k8-opt/bin/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops-shape-constraint.mlir.test.runfiles/org_disc_compiler/mlir/disc/transforms/tests/gpu-only-lhlo-legalize-roots-to-loops-shape-constraint.mlir
+
+-dump-input=help explains the following input dump.
+
+Input was:
+<<<<<<
+           .
+           .
+           .
+         656: } 
+         657:  
+         658:  
+         659: // ----- 
+         660: module { 
+         661:  func.func @kinput_col_reduce(%arg0: memref<?x?xf32>, %arg1: memref<?x?xf32>, %arg2: memref<?xf32>, %arg3: memref<f32>) -> memref<?xf32> { 
+dag:278'0                                                                                                                                             X~~ error: no match found
+         662:  %c32 = arith.constant 32 : index 
+dag:278'0     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+dag:278'1      ?                                 possible intended match
+         663:  %c512 = arith.constant 512 : index 
+dag:278'0     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+         664:  %c1 = arith.constant 1 : index 
+dag:278'0     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+         665:  %c0 = arith.constant 0 : index 
+dag:278'0     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+         666:  "lmhlo.fusion"() ({ 
+dag:278'0     ~~~~~~~~~~~~~~~~~~~~~
+         667:  "lmhlo.abs"(%arg0, %arg1) : (memref<?x?xf32>, memref<?x?xf32>) -> () 
+dag:278'0     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+           .
+           .
+           .
+>>>>>>
+
+--
+
+********************
+********************
+Failed Tests (1):
+  MLIR tests :: gpu-only-lhlo-legalize-roots-to-loops-shape-constraint.mlir
+
+
+Testing Time: 0.09s
+  Failed: 1
