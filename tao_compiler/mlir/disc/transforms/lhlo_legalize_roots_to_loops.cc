@@ -4168,38 +4168,6 @@ LogicalResult HandleGpuFusionOp(OpBuilder& b, Operation* fusion,
       llvm::errs() << "kColReduction <" << kname << ">, use_new: " << use_new
                    << " schedule_hint: " << col_reduction_schedule << "\n";
       LogicalResult r = success();
-#if 0
-      if (col_reduction_schedule == DISC_TILE_W8_H32) {
-        if (use_new) {
-          r = lowerWithScheduleColReductionForRocm<16, 32>(
-              root_ops, dominant_op, fused_block, loop, core_count);
-        } else {
-          r = lowerWithScheduleColReductionBlockTileSchedule<8, 32>(
-              root_ops, dominant_op, fused_block);
-        }
-      } else if (col_reduction_schedule == DISC_TILE_W8_H16) {
-        if (use_new) {
-          r = lowerWithScheduleColReductionForRocm<16, 32>(
-              root_ops, dominant_op, fused_block, loop, core_count);
-        } else {
-          r = lowerWithScheduleColReductionBlockTileSchedule<8, 16>(
-              root_ops, dominant_op, fused_block);
-        }
-        // } else if (col_reduction_schedule == DISC_TILE_LOOP_W64_H8) {
-        //   r = lowerWithScheduleColReductionForRocm<64, 8>(
-        //       root_ops, dominant_op, fused_block, loop, core_count);
-        // } else if (col_reduction_schedule == DISC_TILE_LOOP_W16_H32) {
-        //   r = lowerWithScheduleColReductionForRocm<16, 32>(
-        //       root_ops, dominant_op, fused_block, loop, core_count);
-        // } else if (col_reduction_schedule == DISC_TILE_LOOP_W8_H8) {
-        //   r = lowerWithScheduleColReductionForRocm<8, 8>(
-        //       root_ops, dominant_op, fused_block, loop, core_count);
-      } else {
-        r = lowerWithScheduleColReductionBlockTileSchedule<8, 8>(
-            root_ops, dominant_op, fused_block);
-      }
-#endif
-#if 1
       if (col_reduction_schedule == DISC_FLAT) {
         r = lowerWithScheduleColReduction<512, 32>(root_ops, dominant_op,
                                                    fused_block);
@@ -4210,13 +4178,10 @@ LogicalResult HandleGpuFusionOp(OpBuilder& b, Operation* fusion,
         r = lowerWithScheduleColReduction<512, 32>(root_ops, dominant_op,
                                                    fused_block);
       }
-#endif
-
       if (failed(r)) {
         return dominant_op->emitError()
                << "failed to lower col-reduction loops";
       }
-
     } break;
 
     case FusionType::kLoop: {

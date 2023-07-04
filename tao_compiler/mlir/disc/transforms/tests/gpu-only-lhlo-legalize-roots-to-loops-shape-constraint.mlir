@@ -1,15 +1,10 @@
-// RUN: DISC_ENABLE_SHAPE_CONSTRAINT_IR=1 DISC_ENABLE_HORIZONTAL_FUSION=1
-// disc-opt %s -disc-lhlo-legalize-roots-to-parallel-loops -split-input-file |
-// FileCheck %s
-// RUN: DISC_ENABLE_SHAPE_CONSTRAINT_IR=1 DISC_ENABLE_HORIZONTAL_FUSION=1
-// DISC_MEM_INTENSIVE_OPT_EXPERIMENTAL=true disc-opt \
+// RUN: DISC_ENABLE_SHAPE_CONSTRAINT_IR=1 DISC_ENABLE_HORIZONTAL_FUSION=1 disc-opt %s -disc-lhlo-legalize-roots-to-parallel-loops -split-input-file | FileCheck %s
+// RUN: DISC_ENABLE_SHAPE_CONSTRAINT_IR=1 DISC_ENABLE_HORIZONTAL_FUSION=1 DISC_MEM_INTENSIVE_OPT_EXPERIMENTAL=true disc-opt \
 // RUN:   %s -disc-lhlo-legalize-roots-to-parallel-loops -split-input-file | \
 // RUN:   FileCheck %s --check-prefix=MEMOPT
 
 // CHECK-LABEL: @non_fusion_elemwise_gpu
-// CHECK-SAME: (%[[INPUT1:.*]]: memref<?x?x?xf32, "gpu">, %[[INPUT2:.*]]:
-// memref<?x?x?xf32, "gpu">, %[[OUT:.*]]: memref<?x?x?xf32, "gpu">) ->
-// memref<?x?x?xf32, "gpu">
+// CHECK-SAME: (%[[INPUT1:.*]]: memref<?x?x?xf32, "gpu">, %[[INPUT2:.*]]: memref<?x?x?xf32, "gpu">, %[[OUT:.*]]: memref<?x?x?xf32, "gpu">) -> memref<?x?x?xf32, "gpu">
 func.func @non_fusion_elemwise_gpu(%input1: memref<?x?x?xf32, "gpu">, %input2: memref<?x?x?xf32, "gpu">, %out: memref<?x?x?xf32, "gpu">) -> (memref<?x?x?xf32, "gpu">) {
   // CHECK-NOT: lmhlo
   // CHECK: scf.parallel
@@ -212,93 +207,37 @@ func.func @basic_loop_fusion_misc_root(%input1: memref<?xf32>, %input2: memref<?
 // CHECK-LABEL: @multioutput_loop_fusion_with_dependency
 // CHECK-SAME: (%[[INPUT1:.*]]: memref<?xf32>, %[[INPUT2:.*]]: memref<3xi32>, %[[INPUT3:.*]]: memref<?x?x?xf32>, %[[TMP_BUF:.*]]: memref<?x?x?xf32>, %[[OUT1:.*]]: memref<?x?x?xf32>, %[[OUT2:.*]]: memref<?x?x?xf32>) -> (memref<?x?x?xf32>, memref<?x?x?xf32>)
 func.func @multioutput_loop_fusion_with_dependency(%input1: memref<?xf32>, %input2: memref<3xi32>, %input3: memref<?x?x?xf32>, %tmp: memref<?x?x?xf32>, %out_1: memref<?x?x?xf32>, %out_2: memref<?x?x?xf32>) -> (memref<?x?x?xf32>, memref<?x?x?xf32>) {
-  % c0 = arith.constant 0 : index % c1 = arith.constant 1
-      : index % c2 = arith.constant 2 : index % 0 = memref.dim % input3,
-    % c0 : memref < ? x ? x ? xf32 > % 1 = memref.dim % input3,
-    % c1 : memref < ? x ? x ? xf32 > % 2 = memref.dim % input3,
-    % c2 : memref < ? x ? x ? xf32 > % 3 = arith.muli % 1, % 2
-                            : index % casted_input3 =
-                                  memref.reinterpret_cast % input3 to offset
-                            : [0],
-    sizes : [ % 0, % 1, % 2 ],
-    strides
-                            : [% 3, % 2,
-                               1] { kDiscSymbolicDimAttr = [ @S0, @S1, @S2 ] }
-                            : memref <
-      ? x
-      ? x
-      ? xf32 > to memref <
-      ? x
-      ? x ? xf32 > % casted_tmp = memref.reinterpret_cast % tmp to offset : [0],
-    sizes : [ % 0, % 1, % 2 ],
-    strides
-      : [% 3, % 2, 1] { kDiscSymbolicDimAttr = [ @S0, @S1, @S2 ] }
-      : memref <
-      ? x
-      ? x
-      ? xf32 > to memref <
-      ? x
-      ? x ? xf32 > % casted_out1 = memref.reinterpret_cast % out_1 to offset
-          : [0],
-    sizes : [ % 0, % 1, % 2 ],
-    strides
-      : [% 3, % 2, 1] { kDiscSymbolicDimAttr = [ @S0, @S1, @S2 ] }
-      : memref <
-      ? x
-      ? x
-      ? xf32 > to memref <
-      ? x
-      ? x ? xf32 > % casted_out2 = memref.reinterpret_cast % out_2 to offset
-          : [0],
-    sizes : [ % 0, % 1, % 2 ],
-    strides
-      : [% 3, % 2, 1] { kDiscSymbolicDimAttr = [ @S0, @S1, @S2 ] }
-      : memref <
-      ? x
-      ? x
-      ? xf32 > to memref <
-      ? x
-      ? x
-      ? xf32 >
+  %c0 = arith.constant 0 : index
+  %c1 = arith.constant 1 : index
+  %c2 = arith.constant 2 : index
+  %0 = memref.dim %input3, %c0 : memref<?x?x?xf32>
+  %1 = memref.dim %input3, %c1 : memref<?x?x?xf32>
+  %2 = memref.dim %input3, %c2 : memref<?x?x?xf32>
+  %3 = arith.muli %1, %2 : index
+  %casted_input3 = memref.reinterpret_cast %input3 to offset: [0], sizes: [%0, %1, %2], strides: [%3, %2, 1] {kDiscSymbolicDimAttr = [@S0, @S1, @S2]} : memref<?x?x?xf32> to memref<?x?x?xf32>
+  %casted_tmp = memref.reinterpret_cast %tmp to offset: [0], sizes: [%0, %1, %2], strides: [%3, %2, 1] {kDiscSymbolicDimAttr = [@S0, @S1, @S2]} : memref<?x?x?xf32> to memref<?x?x?xf32>
+  %casted_out1 = memref.reinterpret_cast %out_1 to offset: [0], sizes: [%0, %1, %2], strides: [%3, %2, 1] {kDiscSymbolicDimAttr = [@S0, @S1, @S2]} : memref<?x?x?xf32> to memref<?x?x?xf32>
+  %casted_out2 = memref.reinterpret_cast %out_2 to offset: [0], sizes: [%0, %1, %2], strides: [%3, %2, 1] {kDiscSymbolicDimAttr = [@S0, @S1, @S2]} : memref<?x?x?xf32> to memref<?x?x?xf32>
 
-            // CHECK: %[[CastedInput3:.*]] = memref.reinterpret_cast %[[INPUT3]]
-            // CHECK: %[[CastedTmp:.*]] = memref.reinterpret_cast %[[TMP_BUF]]
-            // CHECK: %[[CastedOut1:.*]] = memref.reinterpret_cast %[[OUT1]]
-            // CHECK: %[[CastedOut2:.*]] = memref.reinterpret_cast %[[OUT2]]
+  // CHECK: %[[CastedInput3:.*]] = memref.reinterpret_cast %[[INPUT3]]
+  // CHECK: %[[CastedTmp:.*]] = memref.reinterpret_cast %[[TMP_BUF]]
+  // CHECK: %[[CastedOut1:.*]] = memref.reinterpret_cast %[[OUT1]]
+  // CHECK: %[[CastedOut2:.*]] = memref.reinterpret_cast %[[OUT2]]
 
-            // CHECK: "lmhlo.fusion"() ({
-            "lmhlo.fusion"()({
-              // CHECK: lmhlo.dynamic_broadcast_in_dim
-              // CHECK: lmhlo.add
-              // CHECK-NOT: lmhlo.multiply
-              // CHECK: scf.parallel
-              "lmhlo.dynamic_broadcast_in_dim"(% input1, % input2,
-                                               % casted_tmp){
-                broadcast_dimensions = dense<2> : tensor<1xi64>
-              } : (memref < ? xf32 >, memref<3xi32>,
-                   memref < ? x
-                   ? x ? xf32 >)->() "lmhlo.add"(% casted_input3, % casted_tmp,
-                                                 % casted_out1)
-                   : (memref < ? x ? x ? xf32 >, memref < ? x ? x ? xf32 >,
-                      memref < ? x
-                      ? x ? xf32 >)->() "lmhlo.multiply"(% casted_input3,
-                                                         % casted_out1,
-                                                         % casted_out2)
-                      : (memref < ? x ? x ? xf32 >, memref < ? x ? x ? xf32 >,
-                         memref <
-                         ? x ? x ? xf32 >)->()
-                                       // CHECK: "lmhlo.terminator"() : () -> ()
-                                       "lmhlo.terminator"()
-                             : ()->() }){disc.fusion.name = "test",
-                                         disc.fusion_type = "kLoop",
-                                         disc.device = "gpu"}
-                      : ()->()
-                            // CHECK: return %[[CastedOut1]], %[[CastedOut2]] :
-                            // memref<?x?x?xf32>, memref<?x?x?xf32>
-                            return %
-                            casted_out1,
-                      % casted_out2 : memref < ? x ? x ? xf32 >,
-                      memref < ? x ? x ? xf32 >
+  // CHECK: "lmhlo.fusion"() ({
+  "lmhlo.fusion"() ({
+    // CHECK: lmhlo.dynamic_broadcast_in_dim
+    // CHECK: lmhlo.add
+    // CHECK-NOT: lmhlo.multiply
+    // CHECK: scf.parallel
+    "lmhlo.dynamic_broadcast_in_dim"(%input1, %input2, %casted_tmp) {broadcast_dimensions = dense<2> : tensor<1xi64>} : (memref<?xf32>, memref<3xi32>, memref<?x?x?xf32>) -> ()
+    "lmhlo.add"(%casted_input3, %casted_tmp, %casted_out1) : (memref<?x?x?xf32>, memref<?x?x?xf32>, memref<?x?x?xf32>) -> ()
+    "lmhlo.multiply"(%casted_input3, %casted_out1, %casted_out2) : (memref<?x?x?xf32>, memref<?x?x?xf32>, memref<?x?x?xf32>) -> ()
+    // CHECK: "lmhlo.terminator"() : () -> ()
+    "lmhlo.terminator"() : () -> ()
+  }) {disc.fusion.name = "test", disc.fusion_type = "kLoop", disc.device = "gpu"} : () -> ()
+  // CHECK: return %[[CastedOut1]], %[[CastedOut2]] : memref<?x?x?xf32>, memref<?x?x?xf32>
+  return %casted_out1, %casted_out2 : memref<?x?x?xf32>, memref<?x?x?xf32>
 }
 "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S0", value = -9223372036854775808 : i64} : () -> ()
 "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S1", value = -9223372036854775808 : i64} : () -> ()
@@ -329,6 +268,7 @@ func.func @multioutput_loop_fusion_without_dependency(%input1: memref<?xf32>, %i
 }
 
 // -----
+
 
 // CHECK-LABEL: @kinput_col_reduce_schedule_1
 // CHECK-SAME: (%[[ARG0:.*]]: memref<?x?xf32>, %[[ARG1:.*]]: memref<?x?xf32>, %[[ARG2:.*]]: memref<?xf32>, %[[ARG3:.*]]: memref<f32>) -> memref<?xf32>
@@ -580,91 +520,49 @@ func.func @kloop_dynamic_reshape(
 
 // CHECK-LABEL: @kstitch_small_output
 func.func @kstitch_small_output(%arg0: memref<?x?xf32>, %arg1: memref<?x?xf32>, %arg2: memref<?xf32>, %arg3: memref<f32>, %arg4: memref<?xf32>) -> memref<?xf32> {
-  % c0 = arith.constant 0 : index % c1 = arith.constant 1 : index % 0 =
-                                             memref.dim % arg0,
-    % c0 : memref < ? x ? xf32 > % 1 = memref.dim % arg0, % c1
-                        : memref <
-      ? x ? xf32 > % t0 = memref.reinterpret_cast % arg0 to offset : [0],
-    sizes : [ % 0, % 1 ],
-    strides
-      : [% 1, 1] { kDiscSymbolicDimAttr = [ @S0, @S1 ] } : memref <
-      ? x
-      ? xf32 > to memref <
-      ? x ? xf32 > % t1 = memref.reinterpret_cast % arg1 to offset : [0],
-    sizes : [ % 0, % 1 ],
-    strides
-      : [% 1, 1] { kDiscSymbolicDimAttr = [ @S0, @S1 ] }
-      : memref <
-      ? x
-      ? xf32 > to memref <
-      ? x ? xf32 > % t2 = memref.reinterpret_cast % arg2 to offset : [0],
-    sizes : [% 0],
-    strides
-      : [1] { kDiscSymbolicDimAttr = [@S0] }
-      : memref <
-      ? xf32 > to memref <
-            ? xf32 > % t4 = memref.reinterpret_cast % arg4 to offset
-            : [0],
-    sizes : [% 0],
-    strides : [1] { kDiscSymbolicDimAttr = [@S0] } : memref <
-      ? xf32 > to memref <
-      ? xf32 >
+  %c0 = arith.constant 0 : index
+  %c1 = arith.constant 1 : index
+  %0 = memref.dim %arg0, %c0 : memref<?x?xf32>
+  %1 = memref.dim %arg0, %c1 : memref<?x?xf32>
+  %t0 = memref.reinterpret_cast %arg0 to offset: [0], sizes: [%0, %1], strides: [%1, 1] {kDiscSymbolicDimAttr = [@S0, @S1]} : memref<?x?xf32> to memref<?x?xf32>
+  %t1 = memref.reinterpret_cast %arg1 to offset: [0], sizes: [%0, %1], strides: [%1, 1] {kDiscSymbolicDimAttr = [@S0, @S1]} : memref<?x?xf32> to memref<?x?xf32>
+  %t2 = memref.reinterpret_cast %arg2 to offset: [0], sizes: [%0], strides: [1] {kDiscSymbolicDimAttr = [@S0]} : memref<?xf32> to memref<?xf32>
+  %t4 = memref.reinterpret_cast %arg4 to offset: [0], sizes: [%0], strides: [1] {kDiscSymbolicDimAttr = [@S0]} : memref<?xf32> to memref<?xf32>
 
-            "lmhlo.fusion"()({"lmhlo.abs"(% t0, % t1) : (
-                memref < ? x ? xf32 >, memref <
-                ? x ? xf32 >)->() "lmhlo.reduce"(% t1, % arg3, % t2)({
-                    ^bb0(% arg5
-                         : memref<f32>, % arg6
-                         : memref<f32>, % arg7
-                         : memref<f32>) :  // no predecessors
-                         "lmhlo.add"(% arg5, % arg6, % arg7) :
-                             (memref<f32>, memref<f32>, memref<f32>)
-                                 ->() "lmhlo.terminator"() : ()
-                                 ->()
-                  }){dimensions = dense<1> : tensor<1xi64>}
-                : (memref < ? x ? xf32 >, memref<f32>,
-                   memref < ? xf32 >)->() "lmhlo.abs"(% t2, % t4)
-                                : (memref < ? xf32 >,
-                                   memref < ? xf32 >)->() "lmhlo.terminator"()
-                                            : ()
-                                                  ->() }){disc.fusion.name =
-                                                              "kstitch_reduce_"
-                                                              "abs",
-                                                          disc.fusion_type =
-                                                              "kStitch",
-                                                          disc.device = "gpu"} :
-                                          ()
-                                              ->()
-                                      // CHECK: lmhlo.fusion
-                                      // CHECK: scf.parallel
+  "lmhlo.fusion"() ({
+    "lmhlo.abs"(%t0, %t1) : (memref<?x?xf32>, memref<?x?xf32>) -> ()
+    "lmhlo.reduce"(%t1, %arg3, %t2) ( {
+    ^bb0(%arg5: memref<f32>, %arg6: memref<f32>, %arg7: memref<f32>):  // no predecessors
+      "lmhlo.add"(%arg5, %arg6, %arg7) : (memref<f32>, memref<f32>, memref<f32>) -> ()
+      "lmhlo.terminator"() : () -> ()
+    }) {dimensions = dense<1> : tensor<1xi64>} : (memref<?x?xf32>, memref<f32>, memref<?xf32>) -> ()
+    "lmhlo.abs"(%t2, %t4) : (memref<?xf32>, memref<?xf32>) -> ()
+    "lmhlo.terminator"() : () -> ()
+  }) {disc.fusion.name = "kstitch_reduce_abs", disc.fusion_type = "kStitch", disc.device = "gpu"} : () -> ()
+  // CHECK: lmhlo.fusion
+  // CHECK: scf.parallel
 
-                                      // CHECK: scf.for
+  // CHECK: scf.for
 
-                                      // It is the default schedule, which is
-                                      // block-wise. Thus it has two rounds of
-                                      // shuffle.
+  // It is the default schedule, which is block-wise. Thus it has two rounds of
+  // shuffle.
 
-                                      // round-one
-                                      // CHECK: gpu.shuffle
-                                      // CHECK: memref.store %[[INTER_RES:.*]],
-                                      // %[[SMEM_BUFFER1:.*]][ CHECK:
-                                      // gpu.barrier
+  // round-one
+  // CHECK: gpu.shuffle
+  // CHECK: memref.store %[[INTER_RES:.*]], %[[SMEM_BUFFER1:.*]][
+  // CHECK: gpu.barrier
 
-                                      // round-two
-                                      // CHECK: gpu.shuffle
-                                      // CHECK: memref.store %[[INTER_RES:.*]],
-                                      // %[[SMEM_BUFFER2:.*]][ CHECK:
-                                      // gpu.barrier
+  // round-two
+  // CHECK: gpu.shuffle
+  // CHECK: memref.store %[[INTER_RES:.*]], %[[SMEM_BUFFER2:.*]][
+  // CHECK: gpu.barrier
 
-                                      // Local loop for `abs`, which has
-                                      // different shape with the input of
-                                      // reduce. CHECK: scf.for
+  // Local loop for `abs`, which has different shape with the input of reduce.
+  // CHECK: scf.for
 
-                                      // Load from smem buffer.
-                                      // CHECK: memref.load %[[SMEM_BUFFER2]]
-                                      return %
-                   t4 : memref <
-                ? xf32 >
+  // Load from smem buffer.
+  // CHECK: memref.load %[[SMEM_BUFFER2]]
+  return %t4 : memref<?xf32>
 }
 "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S0", value = -9223372036854775808 : i64} : () -> ()
 "disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S1", value = -9223372036854775808 : i64} : () -> ()
@@ -700,143 +598,68 @@ func.func @kstitch_independent_reduce_interleave(%arg0: memref<?x?xf32>,
     %arg1: memref<?x?xf32>, %arg2: memref<?xf32>, %arg3: memref<f32>,
     %arg4: memref<?xf32>, %argn1: memref<?x?xf32>, %argn2: memref<?xf32>) ->
     memref<?xf32> {
-  % c0 = arith.constant 0 : index % c1 = arith.constant 1 : index % 0 =
-                                             memref.dim % arg0,
-    % c0 : memref < ? x ? xf32 > % 1 = memref.dim % arg0, % c1
-                        : memref <
-      ? x ? xf32 > % t0 = memref.reinterpret_cast % arg0 to offset : [0],
-    sizes : [ % 0, % 1 ],
-    strides
-      : [% 1, 1] { kDiscSymbolicDimAttr = [ @S0, @S1 ] } : memref <
-      ? x
-      ? xf32 > to memref <
-      ? x ? xf32 > % t1 = memref.reinterpret_cast % arg1 to offset : [0],
-    sizes : [ % 0, % 1 ],
-    strides
-      : [% 1, 1] { kDiscSymbolicDimAttr = [ @S0, @S1 ] }
-      : memref <
-      ? x
-      ? xf32 > to memref <
-      ? x ? xf32 > % t2 = memref.reinterpret_cast % arg2 to offset : [0],
-    sizes : [% 0],
-    strides
-      : [1] { kDiscSymbolicDimAttr = [@S0] }
-      : memref <
-      ? xf32 > to memref <
-            ? xf32 > % t4 = memref.reinterpret_cast % arg4 to offset
-            : [0],
-    sizes : [% 0],
-    strides : [1] { kDiscSymbolicDimAttr = [@S0] } : memref <
-      ? xf32 > to memref <
-            ? xf32 > % tn1 = memref.reinterpret_cast % argn1 to offset
-            : [0],
-    sizes : [ % 0, % 1 ],
-    strides : [% 1, 1] { kDiscSymbolicDimAttr = [ @S0, @S1 ] } : memref < ? x
-      ? xf32 > to memref <
-      ? x ? xf32 > % tn2 = memref.reinterpret_cast % argn2 to offset : [0],
-    sizes : [% 0],
-    strides
-      : [1] { kDiscSymbolicDimAttr = [@S0] }
-      : memref <
-      ? xf32 > to memref <
-      ? xf32 >
 
-            "lmhlo.fusion"()({"lmhlo.abs"(% t0, % t1) : (
-                memref < ? x ? xf32 >, memref <
-                ? x ? xf32 >)->() "lmhlo.reduce"(% t1, % arg3, % t2)({
-                    ^bb0(% arg5
-                         : memref<f32>, % arg6
-                         : memref<f32>, % arg7
-                         : memref<f32>) :  // no predecessors
-                         "lmhlo.add"(% arg5, % arg6, % arg7) :
-                             (memref<f32>, memref<f32>, memref<f32>)
-                                 ->() "lmhlo.terminator"() : ()
-                                 ->()
-                  }){dimensions = dense<1> : tensor<1xi64>}
-                : (memref < ? x ? xf32 >, memref<f32>,
-                   memref < ? xf32 >)->() "lmhlo.negate"(% t0, % tn1)
-                                : (memref < ? x ? xf32 >, memref <
-                                   ? x ? xf32 >)->() "lmhlo.reduce"(
-                                                   % tn1, % arg3, % tn2)({
-                                       ^bb0(% arg5
-                                            : memref<f32>, % arg6
-                                            : memref<f32>, % arg7
-                                            : memref<f32>) :  // no predecessors
-                                            "lmhlo.add"(% arg5, % arg6,
-                                                        % arg7) : (memref<f32>,
-                                                                   memref<f32>,
-                                                                   memref<f32>)
-                                                ->() "lmhlo.terminator"() : ()
-                                                ->()
-                                     }){dimensions = dense<1> : tensor<1xi64>}
-                                   : (memref < ? x ? xf32 >, memref<f32>,
-                                      memref < ? xf32 >)->() "lmhlo.add"(
-                                                           % t2, % tn2, % t4)
-                                                   : (memref < ? xf32 >,
-                                                      memref < ? xf32 >,
-                                                      memref <
-                                                          ? xf32 >)->() "lmhlo."
-                                                                        "termin"
-                                                                        "ator"()
-                                                               : ()->() }){disc.fusion
-                                                                               .name =
-                                                                               "kstitch_independent_reduce",
-                                                                           disc.fusion_type =
-                                                                               "kStitch",
-                                                                           disc.device =
-                                                                               "gpu"}
-                                   : ()->()
-                                         // MEMOPT: lmhlo.fusion
-                                         // MEMOPT-COUNT-2: scf.parallel
-                                         // MEMOPT: gpu.block_id x
-                                         // MEMOPT: gpu.thread_id x
+  %c0 = arith.constant 0 : index
+  %c1 = arith.constant 1 : index
+  %0 = memref.dim %arg0, %c0 : memref<?x?xf32>
+  %1 = memref.dim %arg0, %c1 : memref<?x?xf32>
+  %t0 = memref.reinterpret_cast %arg0 to offset: [0], sizes: [%0, %1], strides: [%1, 1] {kDiscSymbolicDimAttr = [@S0, @S1]} : memref<?x?xf32> to memref<?x?xf32>
+  %t1 = memref.reinterpret_cast %arg1 to offset: [0], sizes: [%0, %1], strides: [%1, 1] {kDiscSymbolicDimAttr = [@S0, @S1]} : memref<?x?xf32> to memref<?x?xf32>
+  %t2 = memref.reinterpret_cast %arg2 to offset: [0], sizes: [%0], strides: [1] {kDiscSymbolicDimAttr = [@S0]} : memref<?xf32> to memref<?xf32>
+  %t4 = memref.reinterpret_cast %arg4 to offset: [0], sizes: [%0], strides: [1] {kDiscSymbolicDimAttr = [@S0]} : memref<?xf32> to memref<?xf32>
+  %tn1 = memref.reinterpret_cast %argn1 to offset: [0], sizes: [%0, %1], strides: [%1, 1] {kDiscSymbolicDimAttr = [@S0, @S1]} : memref<?x?xf32> to memref<?x?xf32>
+  %tn2 = memref.reinterpret_cast %argn2 to offset: [0], sizes: [%0], strides: [1] {kDiscSymbolicDimAttr = [@S0]} : memref<?xf32> to memref<?xf32>
 
-                                         // Interleaved in-thread reduce.
-                                         // MEMOPT: scf.for
-                                         // MEMOPT-COUNT-2: arith.addf
-                                         // MEMOPT: scf.yield
+  "lmhlo.fusion"() ({
+    "lmhlo.abs"(%t0, %t1) : (memref<?x?xf32>, memref<?x?xf32>) -> ()
+    "lmhlo.reduce"(%t1, %arg3, %t2) ( {
+    ^bb0(%arg5: memref<f32>, %arg6: memref<f32>, %arg7: memref<f32>):  // no predecessors
+      "lmhlo.add"(%arg5, %arg6, %arg7) : (memref<f32>, memref<f32>, memref<f32>) -> ()
+      "lmhlo.terminator"() : () -> ()
+    }) {dimensions = dense<1> : tensor<1xi64>} : (memref<?x?xf32>, memref<f32>, memref<?xf32>) -> ()
+    "lmhlo.negate"(%t0, %tn1) : (memref<?x?xf32>, memref<?x?xf32>) -> ()
+    "lmhlo.reduce"(%tn1, %arg3, %tn2) ( {
+    ^bb0(%arg5: memref<f32>, %arg6: memref<f32>, %arg7: memref<f32>):  // no predecessors
+      "lmhlo.add"(%arg5, %arg6, %arg7) : (memref<f32>, memref<f32>, memref<f32>) -> ()
+      "lmhlo.terminator"() : () -> ()
+    }) {dimensions = dense<1> : tensor<1xi64>} : (memref<?x?xf32>, memref<f32>, memref<?xf32>) -> ()
+    "lmhlo.add"(%t2, %tn2, %t4) : (memref<?xf32>, memref<?xf32>, memref<?xf32>) -> ()
+    "lmhlo.terminator"() : () -> ()
+  }) {disc.fusion.name = "kstitch_independent_reduce", disc.fusion_type = "kStitch", disc.device = "gpu"} : () -> ()
+  // MEMOPT: lmhlo.fusion
+  // MEMOPT-COUNT-2: scf.parallel
+  // MEMOPT: gpu.block_id x
+  // MEMOPT: gpu.thread_id x
 
-                                         // Interleaved first-round reduce.
-                                         // MEMOPT-COUNT-2: gpu.shuffle
-                                         // MEMOPT-COUNT-2: arith.addf
+  // Interleaved in-thread reduce.
+  // MEMOPT: scf.for
+  // MEMOPT-COUNT-2: arith.addf
+  // MEMOPT: scf.yield
 
-                                         // MEMOPT: scf.if
-                                         // MEMOPT-COUNT-2: memref.store
-                                         // CHECK: gpu.barrier
+  // Interleaved first-round reduce.
+  // MEMOPT-COUNT-2: gpu.shuffle
+  // MEMOPT-COUNT-2: arith.addf
 
-                                         // Interleaved second-round reduce.
-                                         // MEMOPT: scf.if
-                                         // MEMOPT-COUNT-2: gpu.shuffle
-                                         // MEMOPT-COUNT-2: arith.addf
-                                         // CHECK: gpu.barrier
+  // MEMOPT: scf.if
+  // MEMOPT-COUNT-2: memref.store
+  // CHECK: gpu.barrier
 
-                                         // Finally, stitch with add op.
-                                         // MEMOPT: scf.for
-                                         // MEMOPT-COUNT-2: memref.load
-                                         // MEMOPT: arith.addf
-                                         // MEMOPT: memref.store
+  // Interleaved second-round reduce.
+  // MEMOPT: scf.if
+  // MEMOPT-COUNT-2: gpu.shuffle
+  // MEMOPT-COUNT-2: arith.addf
+  // CHECK: gpu.barrier
 
-                                         return %
-                                         t4
-                   : memref <
-                   ? xf32 >
+  // Finally, stitch with add op.
+  // MEMOPT: scf.for
+  // MEMOPT-COUNT-2: memref.load
+  // MEMOPT: arith.addf
+  // MEMOPT: memref.store
+
+  return %t4 : memref<?xf32>
 }
-"disc_shape.SymbolicDim"(){
-  knownNegativeOne = false,
-  knownNonNegative = true,
-  knownNonSizeOne = false,
-  knownNonSizeZero = false,
-  sym_name = "S0",
-  value = -9223372036854775808 : i64
-} : ()
-        ->() "disc_shape.SymbolicDim"(){
-          knownNegativeOne = false,
-          knownNonNegative = true,
-          knownNonSizeOne = false,
-          knownNonSizeZero = false,
-          sym_name = "S1",
-          value = -9223372036854775808 : i64
-        } : ()
-        ->() func.func @shape_constraint_graph() {
+"disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S0", value = -9223372036854775808 : i64} : () -> ()
+"disc_shape.SymbolicDim"() {knownNegativeOne = false, knownNonNegative = true, knownNonSizeOne = false, knownNonSizeZero = false, sym_name = "S1", value = -9223372036854775808 : i64} : () -> ()
+func.func @shape_constraint_graph() {
   return
 }

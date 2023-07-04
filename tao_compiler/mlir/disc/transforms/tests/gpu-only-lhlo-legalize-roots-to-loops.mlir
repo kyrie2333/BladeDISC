@@ -1,15 +1,11 @@
-// RUN: DISC_ENABLE_SHAPE_CONSTRAINT_IR=0 DISC_ENABLE_HORIZONTAL_FUSION=0
-// disc-opt %s -disc-lhlo-legalize-roots-to-parallel-loops -split-input-file |
-// FileCheck %s
-// RUN: DISC_ENABLE_SHAPE_CONSTRAINT_IR=0 DISC_ENABLE_HORIZONTAL_FUSION=0
-// DISC_MEM_INTENSIVE_OPT_EXPERIMENTAL=true disc-opt \
+// RUN: DISC_ENABLE_SHAPE_CONSTRAINT_IR=0 DISC_ENABLE_HORIZONTAL_FUSION=0 disc-opt %s -disc-lhlo-legalize-roots-to-parallel-loops -split-input-file | FileCheck %s
+// RUN: DISC_ENABLE_SHAPE_CONSTRAINT_IR=0 DISC_ENABLE_HORIZONTAL_FUSION=0 DISC_MEM_INTENSIVE_OPT_EXPERIMENTAL=true disc-opt \
 // RUN:   %s -disc-lhlo-legalize-roots-to-parallel-loops -split-input-file | \
 // RUN:   FileCheck %s --check-prefix=MEMOPT
 
+
 // CHECK-LABEL: @non_fusion_elemwise_gpu
-// CHECK-SAME: (%[[INPUT1:.*]]: memref<?x?x?xf32, "gpu">, %[[INPUT2:.*]]:
-// memref<?x?x?xf32, "gpu">, %[[OUT:.*]]: memref<?x?x?xf32, "gpu">) ->
-// memref<?x?x?xf32, "gpu">
+// CHECK-SAME: (%[[INPUT1:.*]]: memref<?x?x?xf32, "gpu">, %[[INPUT2:.*]]: memref<?x?x?xf32, "gpu">, %[[OUT:.*]]: memref<?x?x?xf32, "gpu">) -> memref<?x?x?xf32, "gpu">
 func.func @non_fusion_elemwise_gpu(%input1: memref<?x?x?xf32, "gpu">, %input2: memref<?x?x?xf32, "gpu">, %out: memref<?x?x?xf32, "gpu">) -> (memref<?x?x?xf32, "gpu">) {
   // CHECK-NOT: lmhlo
   // CHECK: scf.parallel
@@ -324,6 +320,7 @@ func.func @kinput_col_reduce_schedule_2(%arg0: memref<?x?xf32>, %arg1: memref<?x
   return %arg2 : memref<?xf32>
 }
 
+
 // CHECK-LABEL: @kinput_row_reduce_schedule_2_no_vec
 // CHECK-SAME: (%[[ARG0:.*]]: memref<?x?xf32>, %[[ARG1:.*]]: memref<?x?xf32>, %[[ARG2:.*]]: memref<?xf32>, %[[ARG3:.*]]: memref<f32>) -> memref<?xf32>
 func.func @kinput_row_reduce_schedule_2_no_vec(%arg0: memref<?x?xf32>, %arg1: memref<?x?xf32>, %arg2: memref<?xf32>, %arg3: memref<f32>) -> memref<?xf32> {
@@ -586,3 +583,4 @@ func.func @kloop_dynamic_reshape(
     // CHECK: return %[[OUT1]] :  memref<?x?xf64>
     return  %arg2 :  memref<?x?xf64>
 }
+
