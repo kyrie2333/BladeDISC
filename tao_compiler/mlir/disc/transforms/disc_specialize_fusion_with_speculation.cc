@@ -511,8 +511,8 @@ struct DiscSpecializeFusionWithSpeculationPass
                                          row_size, col_size);
     auto if_op = b.create<scf::IfOp>(loc, llvm::None, pred, true);
 
-    auto first_schedule = b.getIntegerAttr(b.getIntegerType(32), DISC_FLAT);
-    auto second_schedule = b.getIntegerAttr(b.getIntegerType(32), DISC_THIN);
+    auto first_schedule = b.getIntegerAttr(b.getIntegerType(32), DISC_THREAD_TILE_H32);
+    auto second_schedule = b.getIntegerAttr(b.getIntegerType(32), DISC_BLOCK_TILE_H64);
     //  block-size is 256 in the second schedule
     auto num_thread_full_attr256 =
         b.getIntegerAttr(b.getIntegerType(32), kThreadsRowReduction);
@@ -522,11 +522,11 @@ struct DiscSpecializeFusionWithSpeculationPass
     fusion_op->setAttr(kThreadPerBlockHint, num_thread_full_attr512);
     fusion_op->setAttr(kColReductionScheduleHint, first_schedule);
     // use fisrt schedule if row_size < col_size
-    addFusionTag(b, fusion_op, "flat");
+    addFusionTag(b, fusion_op, "thread_tile_h32");
     cloned->setAttr(kThreadPerBlockHint, num_thread_full_attr256);
     cloned->setAttr(kColReductionScheduleHint, second_schedule);
     // use second schedule if row_size >= col_size
-    addFusionTag(b, cloned, "thin");
+    addFusionTag(b, cloned, "block_tile_h64");
 
     Block* then_block = &if_op.getThenRegion().getBlocks().front();
     Block* else_block = &if_op.getElseRegion().getBlocks().front();
