@@ -494,8 +494,16 @@ struct DiscSpecializeFusionWithSpeculationPass
     Value row_size = b.create<memref::DimOp>(loc, operand, 0);
     Value col_size = b.create<memref::DimOp>(loc, operand, 1);
 
-    // Col reduction schedule selection policy:
-    // when the shape of matrix is flat(row < col), we use the first schedule.
+    Value matrix_size = b.create<arith::MulIOp>(loc, row_size, col_size);
+    int thread_per_block = kThreadsRowReduction;
+    Value cur_threads = b.create<arith::ConstantIndexOp>(loc, thread_per_block);
+    // b.create<arith::ConstantIndexOp>(loc, max_threads_per_block_);
+    Value cur_blocks =
+        b.create<arith::CeilDivSIOp>(loc, matrix_size, cur_threads);
+    Value ref_blocks = b.create<arith::ConstantIndexOp>(loc, core_count_);
+
+    // Schedule selection policy:
+    // when the shape of matrix is flat(row > col), we use the first schedule.
     // Otherwise, we use the second schedule. The conditions are as follows:
     //   1. row < col
     //   2. row >= col
