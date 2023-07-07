@@ -291,8 +291,6 @@ func.func @kinput_col_reduce_schedule_1(%arg0: memref<?x?xf32>, %arg1: memref<?x
   // CHECK-DAG: %[[BLKS_PER_ROW:.*]] = arith.ceildivui %[[ROWS]], %[[C32]] : index
   // CHECK-DAG: %[[BLKS:.*]] = arith.muli %[[BLKS_PER_COL]], %[[BLKS_PER_ROW]] : index
   // CHECK: scf.parallel (%[[BLOCK_IDX:.*]], %[[THREAD_IDX:.*]]) = (%[[C0]], %[[C0]]) to (%[[BLKS]], %[[C512]]) step (%[[C1]], %[[C1]])
-  // CHECK-DAG: %[[BLKS:.*]] = arith.muli %[[BLKS_PER_COL]], %[[BLKS_PER_ROW]] : index
-  // CHECK: scf.parallel (%[[BLOCK_IDX:.*]], %[[THREAD_IDX:.*]]) = (%[[C0]], %[[C0]]) to (%[[BLKS]], %[[C512]]) step (%[[C1]], %[[C1]])
   // CHECK: %[[DATA:.*]] = memref.load %arg3[] : memref<f32>
   // CHECK: memref.atomic_rmw addf %[[TMP:.*]], %[[ARG2]]
   "lmhlo.fusion"() ({
