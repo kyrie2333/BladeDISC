@@ -269,7 +269,6 @@ func.func @multioutput_loop_fusion_without_dependency(%input1: memref<?xf32>, %i
 
 // -----
 
-
 // CHECK-LABEL: @kinput_col_reduce_schedule_1
 // CHECK-SAME: (%[[ARG0:.*]]: memref<?x?xf32>, %[[ARG1:.*]]: memref<?x?xf32>, %[[ARG2:.*]]: memref<?xf32>, %[[ARG3:.*]]: memref<f32>) -> memref<?xf32>
 func.func @kinput_col_reduce_schedule_1(%arg0: memref<?x?xf32>, %arg1: memref<?x?xf32>, %arg2: memref<?xf32>, %arg3: memref<f32>) -> memref<?xf32> {
@@ -290,6 +289,8 @@ func.func @kinput_col_reduce_schedule_1(%arg0: memref<?x?xf32>, %arg1: memref<?x
   // CHECK: %[[COLS:.*]] = memref.dim %[[ARG1]], %[[C1]] : memref<?x?xf32>
   // CHECK-DAG: %[[BLKS_PER_COL:.*]] = arith.ceildivui %[[COLS]], %[[C512]] : index
   // CHECK-DAG: %[[BLKS_PER_ROW:.*]] = arith.ceildivui %[[ROWS]], %[[C32]] : index
+  // CHECK-DAG: %[[BLKS:.*]] = arith.muli %[[BLKS_PER_COL]], %[[BLKS_PER_ROW]] : index
+  // CHECK: scf.parallel (%[[BLOCK_IDX:.*]], %[[THREAD_IDX:.*]]) = (%[[C0]], %[[C0]]) to (%[[BLKS]], %[[C512]]) step (%[[C1]], %[[C1]])
   // CHECK-DAG: %[[BLKS:.*]] = arith.muli %[[BLKS_PER_COL]], %[[BLKS_PER_ROW]] : index
   // CHECK: scf.parallel (%[[BLOCK_IDX:.*]], %[[THREAD_IDX:.*]]) = (%[[C0]], %[[C0]]) to (%[[BLKS]], %[[C512]]) step (%[[C1]], %[[C1]])
   // CHECK: %[[DATA:.*]] = memref.load %arg3[] : memref<f32>

@@ -13,6 +13,7 @@ PS1='${debian_chroot:+($debian_chroot)}\[\033[01;35;01m\]\u\[\033[00;00;01m\]@ \
 source /opt/venv_disc/bin/activate
 python scripts/python/tao_build.py  /opt/venv_disc/  -s  test_tao_compiler
 
+source /opt/venv_triton/bin/activate
 # export HTTPS_PROXY=http://blade_disc:r299eNZXVTUpuyg7@8.217.91.10:12357
 # no_proxy=dl.google.com
 
